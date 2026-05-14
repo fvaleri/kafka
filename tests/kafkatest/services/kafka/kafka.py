@@ -2056,7 +2056,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cluster_mirror_script = self.path.script("kafka-cluster-mirrors.sh", node)
 
         cmd = fix_opts_for_new_jvm(node)
-        topic_names = ' '.join(['--topic %s' % topic for topic in topics])
+        topic_names = ' '.join(['--topics %s' % topic for topic in topics])
         cmd += "%s --bootstrap-server %s --%s --mirror %s %s" % \
                (cluster_mirror_script,
                 self.bootstrap_servers(self.security_protocol),
