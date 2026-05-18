@@ -556,7 +556,7 @@ class ClusterMirroringTest(Test):
 
         # Delete topic on source and wait for metadata sync
         self.source_kafka.delete_topic(topic)
-        time.sleep(12)
+        self.wait_for_metadata_sync(self.dest_kafka, dest_node, mirror_name)
 
         # Verify mirror partitions transitioned to STOPPED
         self.wait_mirror_state(self.dest_kafka, dest_node, mirror_name, "STOPPED")
@@ -612,6 +612,13 @@ class ClusterMirroringTest(Test):
         count_eu = self.consume_records("orders-eu", self.dest_kafka, max_messages=3)
         assert count_eu == 3, "Expected 3 records for orders-eu, got %d" % count_eu
 
+        # Verify excluded and non-matching topics don't exist on destination
+        dest_topics = list(self.dest_kafka.list_topics(dest_node))
+        assert "orders-internal" not in dest_topics, \
+            "Expected orders-internal to not exist on destination (excluded)"
+        assert "payments" not in dest_topics, \
+            "Expected payments to not exist on destination (not included)"
+
         # Stop orders-eu
         self.dest_kafka.stop_cluster_mirror_topics(dest_node, mirror_name, "orders-eu")
         self.wait_mirror_state(self.dest_kafka, dest_node, mirror_name, "STOPPED",
@@ -659,6 +666,11 @@ class ClusterMirroringTest(Test):
 
         count_pay = self.consume_records("payments", self.dest_kafka, max_messages=2)
         assert count_pay == 2, "Expected 2 records for payments, got %d" % count_pay
+
+        # Verify orders-internal still doesn't exist on destination after all operations
+        dest_topics = list(self.dest_kafka.list_topics(dest_node))
+        assert "orders-internal" not in dest_topics, \
+            "Expected orders-internal to still not exist on destination (excluded)"
 
     @cluster(num_nodes=8)
     @defaults(metadata_quorum=[quorum.isolated_kraft])
@@ -974,7 +986,7 @@ class ClusterMirroringTest(Test):
         )
         self.wait_mirror_state(self.source_kafka, src_node, mirror_name, "LOG_TRUNCATION")
 
-        # Start the stopped source broker so ISR is complete and mirror transitions to MIRRORING
+        # Start the stopped source broker so all replicas rejoin ISR for LME truncation
         self.source_kafka.start_node(src_broker0)
         self.wait_mirror_state(self.source_kafka, src_node, mirror_name, "MIRRORING",
                                err_msg="Reverse mirror did not reach MIRRORING state")
@@ -1166,13 +1178,22 @@ class ClusterMirroringTest(Test):
         assert "other-topic" not in group_desc, \
             "Expected other-topic offset to not appear on destination"
 
-        # Produce 2 more records to my-topic and consume delta using synced offsets
+        def parse_current_offset(desc, topic):
+            """Parse describe_consumer_group output and return current offset for a topic."""
+            for line in desc.strip().splitlines():
+                fields = line.split()
+                if len(fields) >= 4 and fields[1] == topic:
+                    return int(fields[3])
+            return None
+
+        # Produce 2 more records to my-topic and verify synced offset is exactly 3
         self.produce_records(src_node, "my-topic", 2)
         self.wait_mirror_lag_zero(self.dest_kafka, dest_node, mirror_name)
         self.wait_for_metadata_sync(self.dest_kafka, dest_node, mirror_name, num_cycles=2)
 
-        count = self.consume_records("my-topic", self.dest_kafka, max_messages=2, group="my-group")
-        assert count == 2, "Expected 2 delta records using synced offsets, got %d" % count
+        dest_desc = self.dest_kafka.describe_consumer_group("my-group", dest_node)
+        dest_offset = parse_current_offset(dest_desc, "my-topic")
+        assert dest_offset == 3, "Expected dest offset 3 (synced from source), got %s" % dest_offset
 
         # Start active consumer on destination (background)
         consumer_cmd = "%s --bootstrap-server %s --topic my-topic --group my-group" % (
@@ -1190,14 +1211,6 @@ class ClusterMirroringTest(Test):
         dest_desc = self.dest_kafka.describe_consumer_group("my-group", dest_node)
         self.logger.info("Source group describe: %s", src_desc)
         self.logger.info("Dest group describe: %s", dest_desc)
-
-        def parse_current_offset(desc, topic):
-            """Parse describe_consumer_group output and return current offset for a topic."""
-            for line in desc.strip().splitlines():
-                fields = line.split()
-                if len(fields) >= 4 and fields[1] == topic:
-                    return int(fields[3])
-            return None
 
         src_offset = parse_current_offset(src_desc, "my-topic")
         dest_offset = parse_current_offset(dest_desc, "my-topic")
