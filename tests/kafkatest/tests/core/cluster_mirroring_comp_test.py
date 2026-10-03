@@ -152,7 +152,7 @@ class ClusterMirroringCompTest(MirrorUtils, Test):
 
         self.logger.info("Create consumer group on source by consuming my-topic-a")
         self.consume_messages(self.source_kafka, self.source_client_node,
-                             "my-topic-a", "my-group", max_messages=100)
+                              "my-topic-a", "my-group", max_messages=100)
 
         self.logger.info("Set dynamic topic config on source")
         self.source_kafka.alter_topic_config("my-topic-a", "retention.ms=100002", node=self.source_client_node)
@@ -213,7 +213,7 @@ class ClusterMirroringCompTest(MirrorUtils, Test):
         self.logger.info("Verifying destination messages after failover")
         for topic in topics:
             count = self.consume_messages(self.dest_kafka, self.dest_client_node, topic,
-                                         max_messages=100, expected_count=100)
+                                          max_messages=100, expected_count=100)
             assert count >= 100, "Expected %d messages on %s, got %d" % (100, topic, count)
 
     @cluster(num_nodes=8)
@@ -242,7 +242,7 @@ class ClusterMirroringCompTest(MirrorUtils, Test):
 
         self.logger.info("Send 1 message via source broker 0")
         self.produce_messages(self.source_kafka, self.source_client_node, "my-topic", 1,
-                             bootstrap_servers=self.broker_bootstrap(src_broker0))
+                              bootstrap_servers=self.broker_bootstrap(src_broker0))
 
         self.logger.info("Start cluster mirror on destination cluster")
         mirror_cfg = MirrorConfig(self.source_kafka.bootstrap_servers())
@@ -252,7 +252,7 @@ class ClusterMirroringCompTest(MirrorUtils, Test):
 
         dest_broker0 = self.dest_kafka.nodes[0]
         enable_ule_support_cmd = "%s --entity-type topics --entity-name %s --alter --add-config mirror.support.unclean.leader.election=true" % \
-               (self.dest_kafka.kafka_configs_cmd_with_optional_security_settings(dest_broker0, force_use_zk_connection=False), "my-topic")
+                                 (self.dest_kafka.kafka_configs_cmd_with_optional_security_settings(dest_broker0, force_use_zk_connection=False), "my-topic")
         dest_broker0.account.ssh(enable_ule_support_cmd)
 
         self.logger.info("Stop source broker 0 (broker 0 becomes stale)")
@@ -260,7 +260,7 @@ class ClusterMirroringCompTest(MirrorUtils, Test):
 
         self.logger.info("Send 1 message via source broker 1")
         self.produce_messages(self.source_kafka, self.source_client_node, "my-topic", 1,
-                             bootstrap_servers=self.broker_bootstrap(src_broker1))
+                              bootstrap_servers=self.broker_bootstrap(src_broker1))
         self.wait_for_log_convergence(self.source_kafka, self.dest_kafka, topics)
 
         self.logger.info("ULE 1: stop broker 1, start broker 0 (stale), elect it as leader")
@@ -269,7 +269,7 @@ class ClusterMirroringCompTest(MirrorUtils, Test):
 
         self.logger.info("Send 2 messages via source broker 0")
         self.produce_messages(self.source_kafka, self.source_client_node, "my-topic", 2,
-                             bootstrap_servers=self.broker_bootstrap(src_broker0))
+                              bootstrap_servers=self.broker_bootstrap(src_broker0))
         self.wait_for_log_convergence(self.source_kafka, self.dest_kafka, topics)
 
         self.logger.info("Failover: stop mirror so destination topic becomes writable")

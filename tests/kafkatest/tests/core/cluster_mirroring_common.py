@@ -51,13 +51,13 @@ class ClientService(KafkaPathResolverMixin, Service):
 class MirrorConfig:
     """Configuration for a cluster mirror connection properties file."""
     def __init__(
-        self,
-        bootstrap_servers: str,
-        mirror_topic_properties_exclude: str = None,
-        mirror_groups_include: str = None,
-        mirror_groups_exclude: str = None,
-        mirror_acl_include: str = None,
-        security_config: SecurityConfig = None,
+            self,
+            bootstrap_servers: str,
+            mirror_topic_properties_exclude: str = None,
+            mirror_groups_include: str = None,
+            mirror_groups_exclude: str = None,
+            mirror_acl_include: str = None,
+            security_config: SecurityConfig = None,
     ):
         self.properties = {
             "bootstrap.servers": bootstrap_servers,
@@ -75,8 +75,8 @@ class MirrorConfig:
         self.properties["socket.timeout.ms"] = "5000"
 
         if (
-            security_config is not None
-            and security_config.security_protocol != SecurityConfig.PLAINTEXT
+                security_config is not None
+                and security_config.security_protocol != SecurityConfig.PLAINTEXT
         ):
             self.properties |= security_config.properties
 
@@ -147,7 +147,7 @@ class MirrorUtils:
                 if line.strip():
                     count[0] += 1
             self.logger.info("Consumed %d messages from %s so far (expected %s)",
-                        count[0], topic, expected_count)
+                             count[0], topic, expected_count)
             return expected_count is None or count[0] >= expected_count
 
         # When expected_count is set, retry consumption because the high watermark on
@@ -213,17 +213,6 @@ class MirrorUtils:
             err_msg = "Mirror did not reach %s state" % state
         wait_until(check, timeout_sec=120, backoff_sec=2, err_msg=err_msg)
 
-    def wait_mirror_retries_exhausted(self, kafka, client_node, mirror_name,
-                                      topics, max_attempts, err_msg=None):
-        """Wait until all mirror partitions are FAILED with retryAttempt >= max_attempts."""
-        def check():
-            return self.all_partitions_satisfy(
-                kafka, client_node, mirror_name,
-                lambda p: p["state"] == "FAILED" and p["retry_attempt"] >= max_attempts, topics)
-        if err_msg is None:
-            err_msg = "Mirror did not exhaust %d retries" % max_attempts
-        wait_until(check, timeout_sec=240, backoff_sec=2, err_msg=err_msg)
-
     def wait_mirror_lag_zero(self, kafka, client_node, mirror_name,
                              topics, err_msg="Mirror did not catch up"):
         """Wait until all mirror partitions reach MIRRORING state with zero lag."""
@@ -283,7 +272,7 @@ class MirrorUtils:
                                 source[seg] != dest[seg] for seg in source):
                             return False
                         self.logger.info("Hashes match for %s-%d dest %s: %d segments verified",
-                                    topic, partition, node.name, len(source))
+                                         topic, partition, node.name, len(source))
             return True
 
         wait_until(
