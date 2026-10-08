@@ -624,10 +624,10 @@ abstract class AbstractFetcherThread(name: String,
                       markPartitionFailed(topicPartition, s"Unexpected error: ${t.getMessage}")
                   }
                 case Errors.OFFSET_OUT_OF_RANGE =>
-                  val (success, truncated) = handleOutOfRangeError(topicPartition, currentFetchState, fetchPartitionData.currentLeaderEpoch)
+                  val (success, uleDetected) = handleOutOfRangeError(topicPartition, currentFetchState, fetchPartitionData.currentLeaderEpoch)
                   if (!success)
                     partitionsWithError += topicPartition
-                  if (truncated)
+                  if (uleDetected)
                     partitionsNeedsWaitForFollowers += topicPartition
 
                 case Errors.UNKNOWN_LEADER_EPOCH =>
@@ -894,6 +894,15 @@ abstract class AbstractFetcherThread(name: String,
   /**
    * Handle a partition whose offset is out of range and return a new fetch offset along with
    * whether log truncation occurred while handling it.
+   *
+   * Cluster Mirroring: the second element of the returned tuple indicates whether an unclean
+   * leader election (ULE) was detected in the source cluster. It is always true when the leader's
+   * end offset is behind the follower's (the leader has less data). When the follower falls behind
+   * the leader's log start offset, ULE is detected by comparing the leader epoch reported by the
+   * source (via the ListOffsets response) against the epoch we were tracking. A changed epoch
+   * means a different leader is serving the partition and the mirror should trigger ULE recovery.
+   * Without an epoch change, the truncation is caused by log retention and should not trigger
+   * ULE recovery.
    */
   private def fetchOffsetAndTruncate(topicPartition: TopicPartition, topicId: Option[Uuid], currentLeaderEpoch: Int): (PartitionFetchState, Boolean) = {
     val replicaEndOffset = logEndOffset(topicPartition)
@@ -944,9 +953,7 @@ abstract class AbstractFetcherThread(name: String,
       val offsetAndEpoch = leader.fetchEarliestOffset(topicPartition, currentLeaderEpoch)
       val leaderStartOffset = offsetAndEpoch.offset
       val offsetToFetch = Math.max(leaderStartOffset, replicaEndOffset)
-      // Only truncate log when current leader's log start offset is greater than follower's log end offset.
-      val truncated = leaderStartOffset > replicaEndOffset
-      if (truncated) {
+      if (leaderStartOffset > replicaEndOffset) {
         warn(s"Truncate fully and reset fetch offset for partition $topicPartition from $replicaEndOffset to the " +
           s"current leader's start offset $leaderStartOffset because the local replica's end offset is smaller than the " +
           s"current leader's start offsets.")
@@ -960,33 +967,31 @@ abstract class AbstractFetcherThread(name: String,
       fetcherLagStats.getAndMaybePut(topicPartition).lag = initialLag
       val newFetchState = new PartitionFetchState(topicId.toJava, offsetToFetch, Optional.of(initialLag), currentLeaderEpoch,
         ReplicaState.FETCHING, latestEpoch(topicPartition), mirrorName)
-      (newFetchState, truncated)
+      // Cluster Mirroring: only trigger ULE recovery when the source leader epoch changed.
+      // If the epoch is the same, this is log retention, not an unclean leader election.
+      val uleDetected = leaderStartOffset > replicaEndOffset && offsetAndEpoch.epoch != currentLeaderEpoch
+      (newFetchState, uleDetected)
     }
   }
 
   /**
    * Handles the out of range error for the given topic partition.
    *
-   * Returns true if
-   *    - the request succeeded or
-   *    - it was fenced and this thread hasn't received new epoch, which means we need not backoff and retry as the
-   *    partition is moved to failed state.
-   *
-   * Returns false if there was a retriable error.
-   *
-   * @param topicPartition topic partition
-   * @param fetchState current fetch state
-   * @param leaderEpochInRequest current leader epoch sent in the fetch request.
+   * Returns (success, uleDetected):
+   *  - success is true if the request succeeded or it was fenced and this thread hasn't received
+   *    a new epoch (partition moved to failed state, no backoff needed). False on retriable errors.
+   *  - uleDetected (cluster mirroring): true when the source leader epoch changed, indicating an
+   *    unclean leader election rather than log retention.
    */
   private def handleOutOfRangeError(topicPartition: TopicPartition,
                                     fetchState: PartitionFetchState,
                                     leaderEpochInRequest: Optional[Integer]): (Boolean, Boolean) = {
     try {
-      val (newFetchState, truncated) = fetchOffsetAndTruncate(topicPartition, fetchState.topicId().toScala, fetchState.currentLeaderEpoch)
+      val (newFetchState, uleDetected) = fetchOffsetAndTruncate(topicPartition, fetchState.topicId().toScala, fetchState.currentLeaderEpoch)
       partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
       info(s"Current offset ${fetchState.fetchOffset} for partition $topicPartition is " +
         s"out of range, which typically implies a leader change. Reset fetch offset to ${newFetchState.fetchOffset}")
-      (true, truncated)
+      (true, uleDetected)
     } catch {
       case _: FencedLeaderEpochException =>
         (onPartitionFenced(topicPartition, leaderEpochInRequest), false)
