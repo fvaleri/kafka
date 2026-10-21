@@ -387,7 +387,7 @@ class MirrorCoordinatorSender {
     /** Writes mirror partition states to local coordinator, batching all writes. */
     CompletableFuture<WriteMirrorStatesResponseData> writeStateToLocalCoordinator(
             String mirrorName, Map<String, Set<MirrorStateWrite>> stateWrites) {
-        log.info("Writing states to local coordinator for mirror {}", mirrorName);
+        log.debug("Writing states to local coordinator for mirror {}", mirrorName);
 
         if (coordinatorWriter.isEmpty()) {
             return CompletableFuture.completedFuture(new WriteMirrorStatesResponseData());

@@ -166,7 +166,7 @@ public class MirrorMetadataCache {
     }
 
     public long countPartitionsInState(MirrorPartitionState state) {
-        return mirrorPartitions.values().stream()
+        return coordinatorCachedMirrorPartitions.values().stream()
                 .filter(entry -> entry.state() == state)
                 .count();
     }
