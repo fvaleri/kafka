@@ -448,7 +448,7 @@ class MirrorSourceSyncer {
 
     private void retryPendingTombstoneWrites() {
         Set<String> configuredMirrors = mirrorCache.getMirrorNames();
-        Set<String> staleMirrors = mirrorCache.getMirrorPartitions().stream()
+        Set<String> staleMirrors = mirrorCache.getMirrorPartitions(false).stream()
                 .map(MirrorPartition::mirrorName)
                 .filter(name -> !configuredMirrors.contains(name))
                 .collect(Collectors.toSet());
@@ -483,7 +483,7 @@ class MirrorSourceSyncer {
                                 topicImage.partitions().forEach((partitionId, partition) -> {
                                     if (partition.leader == nodeId) {
                                         MirrorPartition key = new MirrorPartition(mirrorName, topicImage.id(),  partitionId);
-                                        MirrorPartitionMetadata mpm = MirrorPartitionMetadata.orEmpty(mirrorCache.getPartitionMetadata(key));
+                                        MirrorPartitionMetadata mpm = MirrorPartitionMetadata.orEmpty(mirrorCache.getPartitionMetadata(key, false));
                                         if (mpm.state() == MirrorPartitionState.FAILED && mpm.retryAttempt() == MirrorPartitionMetadata.NON_RETRYABLE_ERROR) {
                                             log.debug("Skipping transition to FAILED state for partition {}-{} . Reason: Already in this state due to: {}.",
                                                     topic, partitionId, mpm.errorMessage());
@@ -698,7 +698,7 @@ class MirrorSourceSyncer {
                         topicImage.partitions().forEach((partitionId, partition) -> {
                             if (partition.leader == nodeId) {
                                 MirrorPartition key = new MirrorPartition(mirrorName, topicImage.id(), partitionId);
-                                MirrorPartitionMetadata mpm = MirrorPartitionMetadata.orEmpty(mirrorCache.getPartitionMetadata(key));
+                                MirrorPartitionMetadata mpm = MirrorPartitionMetadata.orEmpty(mirrorCache.getPartitionMetadata(key, false));
                                 if (mpm.state() == MirrorPartitionState.FAILED && mpm.retryAttempt() == MirrorPartitionMetadata.NON_RETRYABLE_ERROR) {
                                     log.debug("Skipping transition to FAILED state for partition {}. Already in this state due to: {}", name, partition, mpm.errorMessage());
                                 } else {

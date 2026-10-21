@@ -44,6 +44,7 @@ import java.util.stream.Collectors;
  */
 public class MirrorMetadataCache {
     private final Map<MirrorPartition, MirrorPartitionMetadata> mirrorPartitions = new ConcurrentHashMap<>();
+    private final Map<MirrorPartition, MirrorPartitionMetadata> coordinatorCachedMirrorPartitions = new ConcurrentHashMap<>();
     private final Map<String, Map<TopicPartition, SourceClusterLeader>> sourceLeaders = new ConcurrentHashMap<>();
 
     private final MetadataCache metadataCache;
@@ -64,6 +65,7 @@ public class MirrorMetadataCache {
 
     public void clear() {
         mirrorPartitions.clear();
+        coordinatorCachedMirrorPartitions.clear();
         sourceLeaders.clear();
     }
 
@@ -143,11 +145,17 @@ public class MirrorMetadataCache {
         return partitionReg.leaderEpoch;
     }
 
-    public Map<TopicPartition, MirrorPartitionState> getPartitionStates(String mirrorName) {
+    public Map<TopicPartition, MirrorPartitionState> getPartitionStates(String mirrorName, boolean fromCoordinator) {
         Map<TopicPartition, MirrorPartitionState> result = new HashMap<>();
-        mirrorPartitions.keySet().forEach(key -> {
+        Set<MirrorPartition> mirrorPartitionSets;
+        if (fromCoordinator) {
+            mirrorPartitionSets = coordinatorCachedMirrorPartitions.keySet();
+        } else {
+            mirrorPartitionSets = mirrorPartitions.keySet();
+        }
+        mirrorPartitionSets.forEach(key -> {
             if (key.mirrorName().equals(mirrorName)) {
-                MirrorPartitionMetadata entry = getPartitionMetadata(key);
+                MirrorPartitionMetadata entry = getPartitionMetadata(key, fromCoordinator);
                 if (entry != null && entry.state() != null) {
                     metadataCache.getTopicName(key.topicId()).ifPresent(topicName ->
                             result.put(new TopicPartition(topicName, key.partition()), entry.state()));
@@ -177,29 +185,51 @@ public class MirrorMetadataCache {
         return result;
     }
 
-    public MirrorPartitionMetadata getPartitionMetadata(MirrorPartition mp) {
+    public MirrorPartitionMetadata getPartitionMetadata(MirrorPartition mp, boolean fromCoordinator) {
+        if (fromCoordinator) {
+            return MirrorPartitionMetadata.orEmpty(coordinatorCachedMirrorPartitions.get(mp));
+        }
         return MirrorPartitionMetadata.orEmpty(mirrorPartitions.get(mp));
     }
 
-    public void updatePartitionMetadata(MirrorPartition mp, MirrorPartitionMetadata metadata) {
-        mirrorPartitions.put(mp, metadata);
+    public void updatePartitionMetadata(MirrorPartition mp, MirrorPartitionMetadata metadata, boolean fromCoordinator) {
+        if (fromCoordinator) {
+            coordinatorCachedMirrorPartitions.put(mp, metadata);
+        } else {
+            mirrorPartitions.put(mp, metadata);
+        }
     }
 
-    public void removePartitionMetadata(MirrorPartition mp) {
-        mirrorPartitions.remove(mp);
+    public void removePartitionMetadata(MirrorPartition mp,  boolean fromCoordinator) {
+        if (fromCoordinator) {
+            coordinatorCachedMirrorPartitions.remove(mp);
+        } else {
+            mirrorPartitions.remove(mp);
+        }
     }
 
-    public void removePartitionMetadata(int coordPartition, int numPartitions) {
-        mirrorPartitions.keySet().removeIf(key ->
-            key.coordinatorPartition(numPartitions) == coordPartition);
+    public void removePartitionMetadata(int coordPartition, int numPartitions,  boolean fromCoordinator) {
+        if (fromCoordinator) {
+            coordinatorCachedMirrorPartitions.keySet().removeIf(key -> key.coordinatorPartition(numPartitions) == coordPartition);
+        } else {
+            mirrorPartitions.keySet().removeIf(key ->
+                    key.coordinatorPartition(numPartitions) == coordPartition);
+        }
     }
 
-    public Set<MirrorPartition> getMirrorPartitions() {
+    public Set<MirrorPartition> getMirrorPartitions(boolean fromCoordinator) {
+        if (fromCoordinator) {
+            return coordinatorCachedMirrorPartitions.keySet();
+        }
         return mirrorPartitions.keySet();
     }
 
-    public void removeMirrorPartitions(String mirrorName) {
-        mirrorPartitions.keySet().removeIf(key -> key.mirrorName().equals(mirrorName));
+    public void removeMirrorPartitions(String mirrorName, boolean fromCoordinator) {
+        if (fromCoordinator) {
+            coordinatorCachedMirrorPartitions.keySet().removeIf(key -> key.mirrorName().equals(mirrorName));
+        } else {
+            mirrorPartitions.keySet().removeIf(key -> key.mirrorName().equals(mirrorName));
+        }
     }
 
     public Optional<SourceClusterLeader> getSourceClusterLeader(String mirrorName, TopicPartition tp) {

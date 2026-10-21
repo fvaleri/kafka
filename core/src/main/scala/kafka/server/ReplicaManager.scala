@@ -1826,7 +1826,7 @@ class ReplicaManager(val config: KafkaConfig,
               org.apache.kafka.server.mirror.MirrorPartition.of(
                 mirrorName.get(),
                 mirrorCache.get.getTopicId(partition.topicPartition.topic()),
-                partition.topicPartition.partition()))
+                partition.topicPartition.partition()), false)
             if (entry != null) entry.state() else MirrorPartitionState.UNKNOWN
           } else MirrorPartitionState.UNKNOWN
           val sourceLeaderEpochOpt: Optional[Integer] = if (partition.isLeader && mirrorCache.isDefined && mirrorName.isPresent) {
@@ -2687,7 +2687,7 @@ class ReplicaManager(val config: KafkaConfig,
         org.apache.kafka.server.mirror.MirrorPartition.of(
           mirrorName.get(),
           metadataCache.getTopicId(partition.topicPartition.topic()),
-          partition.topicPartition.partition()))
+          partition.topicPartition.partition()), false)
       val entryState = if (entry != null) entry.state() else null
       val allowed = entryState == MirrorPartitionState.STOPPED ||
         (entryState == MirrorPartitionState.STOPPING &&

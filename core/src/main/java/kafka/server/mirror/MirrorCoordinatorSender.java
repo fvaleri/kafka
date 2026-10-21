@@ -269,7 +269,7 @@ class MirrorCoordinatorSender {
                                                     .withErrorMessage(partition.errorMessage())
                                                     .withRetryAttempt(partition.retryAttempt())
                                                     .withPrevState(MirrorPartitionState.fromValue(partition.previousState()))
-                                                    .build());
+                                                    .build(), false);
                                 }));
 
                             synchronized (merged) {
@@ -387,7 +387,7 @@ class MirrorCoordinatorSender {
     /** Writes mirror partition states to local coordinator, batching all writes. */
     CompletableFuture<WriteMirrorStatesResponseData> writeStateToLocalCoordinator(
             String mirrorName, Map<String, Set<MirrorStateWrite>> stateWrites) {
-        log.debug("Writing states to local coordinator for mirror {}", mirrorName);
+        log.info("Writing states to local coordinator for mirror {}", mirrorName);
 
         if (coordinatorWriter.isEmpty()) {
             return CompletableFuture.completedFuture(new WriteMirrorStatesResponseData());

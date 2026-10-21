@@ -189,7 +189,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
             MirrorPartitionState previousState = MirrorPartitionState.fromValue(stateValue.previousState());
             maybeUpdateLeaderEpochMap(mp, stateValue.leaderEpoch());
             maybeUpdateStateEpochMap(mp, stateValue.stateEpoch());
-            MirrorPartitionMetadata existing = mirrorCache.getPartitionMetadata(mp);
+            MirrorPartitionMetadata existing = mirrorCache.getPartitionMetadata(mp, true);
             MirrorPartitionMetadata.Builder builder =
                     new MirrorPartitionMetadata.Builder(existing)
                         .withState(state)
@@ -206,9 +206,9 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
                         .withRetryAttempt(0)
                         .withPrevState(null);
             }
-            mirrorCache.updatePartitionMetadata(mp, builder.build());
+            mirrorCache.updatePartitionMetadata(mp, builder.build(), true);
         } else {
-            mirrorCache.removePartitionMetadata(mp);
+            mirrorCache.removePartitionMetadata(mp, true);
             leaderEpochMap.remove(mp);
             stateEpochMap.remove(mp);
         }
@@ -233,13 +233,13 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
         MirrorPartition mp = MirrorPartition.of(key.mirrorName(), key.topicId(), key.partition());
         if (value != null) {
             LastMirrorEpochsValue lme = (LastMirrorEpochsValue) value.message();
-            MirrorPartitionMetadata existing = mirrorCache.getPartitionMetadata(mp);
+            MirrorPartitionMetadata existing = mirrorCache.getPartitionMetadata(mp, true);
             mirrorCache.updatePartitionMetadata(mp,
                     new MirrorPartitionMetadata.Builder(existing)
                         .withLastPosition(new EpochOffset(lme.lastMirrorEpoch(), lme.lastMirrorOffset()))
-                        .build());
+                        .build(), true);
         } else {
-            mirrorCache.removePartitionMetadata(mp);
+            mirrorCache.removePartitionMetadata(mp, true);
         }
     }
 
@@ -275,7 +275,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
             List<ReadMirrorStatesResponseData.PartitionResult> partitionResults = new ArrayList<>();
             parts.forEach(part -> {
                 MirrorPartition mp = MirrorPartition.of(mirrorName, mirrorCache.getTopicId(topic), part);
-                MirrorPartitionMetadata mpm = mirrorCache.getPartitionMetadata(mp);
+                MirrorPartitionMetadata mpm = mirrorCache.getPartitionMetadata(mp, true);
                 ReadMirrorStatesResponseData.PartitionResult pr = new ReadMirrorStatesResponseData.PartitionResult()
                         .setPartitionIndex(part)
                         .setState(mpm.state().value())
@@ -353,23 +353,23 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
             log.info("Write fenced for {} because current epoch {} > expected {}", tp, currentStateEpoch, expectedStateEpoch);
             throw Errors.FENCED_STATE_EPOCH.exception();
         }
-        MirrorPartitionState currentState = mirrorCache.getPartitionMetadata(mp).state();
+        MirrorPartitionState currentState = mirrorCache.getPartitionMetadata(mp, true).state();
         if (!MirrorPartitionMetadata.isValidStateTransition(currentState, state)) {
             log.warn("Skipping invalid partition {} transition from {} to {}", tp, currentState, state);
             return new CoordinatorResult<>(List.of(), null);
         }
 
-        MirrorPartitionMetadata existing = mirrorCache.getPartitionMetadata(mp);
+        MirrorPartitionMetadata existing = mirrorCache.getPartitionMetadata(mp, true);
         mirrorCache.updatePartitionMetadata(mp,
                 new MirrorPartitionMetadata.Builder(existing)
                         .withResolvedErrorInfo(state, errorMessage, retryAttempt,
                                 nonRetryable, mirrorConfig.failedRetryMaxAttempts())
-                        .build());
+                        .build(), true);
         maybeUpdateLeaderEpochMap(mp, leaderEpoch);
         int newEpoch = currentStateEpoch + 1;
         stateEpochMap.put(mp, newEpoch);
 
-        MirrorPartitionMetadata cachedMp = mirrorCache.getPartitionMetadata(mp);
+        MirrorPartitionMetadata cachedMp = mirrorCache.getPartitionMetadata(mp, true);
         var key = new MirrorPartitionStateKey()
                 .setMirrorName(mirrorName)
                 .setTopicId(mp.topicId())
