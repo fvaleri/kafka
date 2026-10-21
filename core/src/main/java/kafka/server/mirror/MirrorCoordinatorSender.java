@@ -187,16 +187,36 @@ class MirrorCoordinatorSender {
     CompletableFuture<ReadMirrorStatesResponse> readStateFromLocalCoordinator(
             String mirrorName, Map<String, Set<Integer>> partitions) {
         return coordinatorReader.map(reader -> reader.readPartitionStates(mirrorName, partitions)
-                .thenApply(ReadMirrorStatesResponse::new)
-                .exceptionally(ex -> {
-                    Throwable cause = (ex instanceof CompletionException && ex.getCause() != null) ? ex.getCause() : ex;
-                    if (cause instanceof CoordinatorLoadInProgressException) {
-                        log.debug("Failed to read local state for partitions {} (shard loading).", partitions);
-                    } else {
-                        log.warn("Failed to read local state for partitions {}. {}", partitions, cause.getMessage());
+                .handle((res, ex) -> {
+                    if (ex != null) {
+                        Throwable cause = (ex instanceof CompletionException && ex.getCause() != null) ? ex.getCause() : ex;
+                        if (cause instanceof CoordinatorLoadInProgressException) {
+                            log.debug("Failed to read local state for partitions {} (shard loading).", partitions);
+                        } else {
+                            log.warn("Failed to read local state for partitions {}. {}", partitions, cause.getMessage());
+                        }
+                        Errors error = Errors.forException(cause);
+                        return new ReadMirrorStatesResponse(new ReadMirrorStatesResponseData().setErrorCode(error.code()).setErrorMessage(error.message()));
                     }
-                    return new ReadMirrorStatesResponse(new ReadMirrorStatesResponseData());
-                })).orElseGet(() -> CompletableFuture.completedFuture(new ReadMirrorStatesResponse(new ReadMirrorStatesResponseData())));
+
+                    // update the data leader cache
+                    res.topics().forEach(topic ->
+                            topic.partitions().forEach(partition -> {
+                                MirrorPartition mp = MirrorPartition.of(
+                                        mirrorName, mirrorCache.getTopicId(topic.topicName()), partition.partitionIndex());
+                                mirrorCache.updatePartitionMetadata(mp,
+                                        new MirrorPartitionMetadata.Builder()
+                                                .withState(MirrorPartitionState.fromValue(partition.state()))
+                                                .withStateEpoch(partition.stateEpoch())
+                                                .withLastPosition(new EpochOffset(partition.lastMirrorEpoch(),
+                                                        partition.lastMirrorOffset()))
+                                                .withErrorMessage(partition.errorMessage())
+                                                .withRetryAttempt(partition.retryAttempt())
+                                                .withPrevState(MirrorPartitionState.fromValue(partition.previousState()))
+                                                .build(), false);
+                            }));
+                    return new ReadMirrorStatesResponse(res);
+                })).orElseGet(() -> CompletableFuture.failedFuture(new IllegalStateException("No local coordinator reader available")));
     }
 
     /**
@@ -260,6 +280,7 @@ class MirrorCoordinatorSender {
                                 topic.partitions().forEach(partition -> {
                                     MirrorPartition mp = MirrorPartition.of(
                                             mirrorName, mirrorCache.getTopicId(topic.topicName()), partition.partitionIndex());
+                                    // update the data leader cache
                                     mirrorCache.updatePartitionMetadata(mp,
                                             new MirrorPartitionMetadata.Builder()
                                                     .withState(MirrorPartitionState.fromValue(partition.state()))
