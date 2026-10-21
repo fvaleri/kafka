@@ -1042,7 +1042,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
      * of a deleted mirror, then removes the mirror's cache entries.
      */
     void writeTombstoneRecords(String mirrorName) {
-        Map<TopicPartition, MirrorPartitionState> states = mirrorCache.getPartitionStates(mirrorName, false);
+        Map<TopicPartition, MirrorPartitionState> states = mirrorCache.getPartitionStates(mirrorName, true);
         Map<Integer, Set<TopicPartition>> coordPartitionToMirrorPartitions = new HashMap<>();
         states.forEach((tp, state) -> {
             if (coordSender.isLocalCoordinatorFor(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition())) {
@@ -1896,7 +1896,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
             for (int i = 0; i < topicImage.partitions().size(); i++) {
                 if (coordSender.isLocalCoordinatorFor(mirrorName, topicImage.id(), i)) {
                     MirrorPartitionMetadata cachedEntry = mirrorCache.getPartitionMetadata(
-                            MirrorPartition.of(mirrorName, topicImage.id(), i), false);
+                            MirrorPartition.of(mirrorName, topicImage.id(), i), true);
                     MirrorPartitionState state = cachedEntry != null && cachedEntry.state() != null
                             ? cachedEntry.state() : MirrorPartitionState.UNKNOWN;
                     if (!validStates.contains(state)) {
