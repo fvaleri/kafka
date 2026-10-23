@@ -2110,14 +2110,22 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
             }
             for (int i = 0; i < topicImage.partitions().size(); i++) {
                 MirrorPartition mp = MirrorPartition.of(mirrorName, topicImage.id(), i);
-                MirrorPartitionMetadata mpm = mirrorCache.getPartitionMetadata(mp, false);
-                if (mpm.state() == MirrorPartitionState.FAILED && mpm.prevState() != null) {
-                    MirrorPartitionState targetState = mpm.prevState();
-                    MirrorStateWrite write = new MirrorStateWrite(i, targetState,
-                            mpm.lastPosition().epoch(), mpm.stateEpoch(), null, null, 0, false);
-                    if (coordSender.isLocalCoordinatorFor(mirrorName, topicImage.id(), i)) {
+                if (coordSender.isLocalCoordinatorFor(mirrorName, topicImage.id(), i)) {
+                    // We're going to write recovery records to local coordinator, so get cache from coordinator
+                    MirrorPartitionMetadata mpm = mirrorCache.getPartitionMetadata(mp, true);
+                    if (mpm.state() == MirrorPartitionState.FAILED && mpm.prevState() != null) {
+                        MirrorStateWrite write = new MirrorStateWrite(i, mpm.prevState(),
+                                mpm.lastPosition().epoch(), mpm.stateEpoch(), null, null, 0, false);
                         localWrites.computeIfAbsent(topic, k -> new HashSet<>()).add(write);
-                    } else {
+                    }
+                } else {
+                    // For recovery records to remote coordinator, this node might not be the data leader, but we have
+                    // read the state from remote coordinator in #writeRecoveryRecords, so we make sure the data leader
+                    // cache contains the correct info.
+                    MirrorPartitionMetadata mpm = mirrorCache.getPartitionMetadata(mp, false);
+                    if (mpm.state() == MirrorPartitionState.FAILED && mpm.prevState() != null) {
+                        MirrorStateWrite write = new MirrorStateWrite(i, mpm.prevState(),
+                                mpm.lastPosition().epoch(), mpm.stateEpoch(), null, null, 0, false);
                         remoteWrites.computeIfAbsent(topic, k -> new HashSet<>()).add(write);
                     }
                 }

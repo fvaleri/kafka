@@ -446,6 +446,7 @@ class MirrorCoordinatorSender {
                 partitionData.setPartitionIndex(m.partition());
                 partitionData.setErrorMessage(m.errorMessage());
                 partitionData.setNonRetryable(m.nonRetryable());
+                partitionData.setRetryAttempt(m.retryAttempt());
 
                 nodeToTopicPartitions
                     .computeIfAbsent(coordinatorNode, k -> new HashMap<>())
