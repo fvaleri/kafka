@@ -34,6 +34,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetrics;
 import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.mirror.metrics.ClusterMirrorCoordinatorMetrics;
+import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.mirror.MirrorPartition;
 import org.apache.kafka.server.mirror.MirrorPartitionState;
 import org.apache.kafka.server.util.KafkaScheduler;
@@ -71,7 +72,7 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
     private final ClusterMirrorConfig mirrorConfig;
     private final CoordinatorRuntime<ClusterMirrorCoordinatorShard, CoordinatorRecord> runtime;
     private final MetadataManagerBridge mirrorManager;
-    private final MirrorMetadataCache mirrorCache;
+    private final MetadataCache metadataCache;
     private final KafkaScheduler scheduler;
     private final Metrics metrics;
 
@@ -83,8 +84,9 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
         private Time time;
         private Timer timer;
         private CoordinatorRuntimeMetrics runtimeMetrics;
+        private ClusterMirrorCoordinatorMetrics coordinatorMetrics;
         private MetadataManagerBridge mirrorManager;
-        private MirrorMetadataCache mirrorCache;
+        private MetadataCache metadataCache;
         private Metrics metrics;
 
         public Builder(int nodeId, ClusterMirrorConfig config) {
@@ -117,13 +119,18 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
             return this;
         }
 
+        public Builder withCoordinatorMetrics(ClusterMirrorCoordinatorMetrics coordinatorMetrics) {
+            this.coordinatorMetrics = coordinatorMetrics;
+            return this;
+        }
+        
         public Builder withMetadataManager(MetadataManagerBridge metadataManager) {
             this.mirrorManager = metadataManager;
             return this;
         }
 
-        public Builder withMirrorCache(MirrorMetadataCache mirrorCache) {
-            this.mirrorCache = mirrorCache;
+        public Builder withMetadataCache(MetadataCache metadataCache) {
+            this.metadataCache = metadataCache;
             return this;
         }
 
@@ -150,17 +157,17 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
                     .withPartitionWriter(writer)
                     .withLoader(loader)
                     .withCoordinatorShardBuilderSupplier(
-                            () -> new ClusterMirrorCoordinatorShard.Builder(config, mirrorManager, mirrorCache, numPartitions))
+                            () -> new ClusterMirrorCoordinatorShard.Builder(config, mirrorManager, metadataCache, numPartitions))
                     .withDefaultWriteTimeOut(Duration.ofMillis(config.coordinatorWriteTimeoutMs()))
                     .withCoordinatorRuntimeMetrics(runtimeMetrics)
-                    .withCoordinatorMetrics(new ClusterMirrorCoordinatorMetrics())
+                    .withCoordinatorMetrics(coordinatorMetrics)
                     .withSerializer(new MirrorRecordSerde())
                     .withAppendLingerMs(config.coordinatorAppendLingerMs())
                     .withExecutorService(Executors.newSingleThreadExecutor())
                     .build();
 
             return new ClusterMirrorCoordinatorService(
-                    nodeId, config, runtime, mirrorManager, mirrorCache, metrics);
+                    nodeId, config, runtime, mirrorManager, metadataCache, metrics);
         }
     }
 
@@ -169,7 +176,7 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
         ClusterMirrorConfig mirrorConfig,
         CoordinatorRuntime<ClusterMirrorCoordinatorShard, CoordinatorRecord> runtime,
         MetadataManagerBridge mirrorManager,
-        MirrorMetadataCache mirrorCache,
+        MetadataCache metadataCache,
         Metrics metrics
     ) {
         String name = "[" + ClusterMirrorCoordinatorService.class.getSimpleName() + " id=" + nodeId + "] ";
@@ -177,7 +184,7 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
         this.mirrorConfig = mirrorConfig;
         this.runtime = runtime;
         this.mirrorManager = mirrorManager;
-        this.mirrorCache = mirrorCache;
+        this.metadataCache = metadataCache;
         this.scheduler = new KafkaScheduler(1, true, "mirror-coordinator-");
         this.scheduler.startup();
         this.metrics = metrics;
@@ -310,7 +317,7 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
         // Each partition maps to a coordinator shard based on mirror name, topic id, and partition.
         Map<Integer, Map<String, Set<Integer>>> byCoordPartition = new HashMap<>();
         partitions.forEach((topic, parts) -> parts.forEach(part -> {
-            int cp = partitionFor(MirrorPartition.of(mirrorName, mirrorCache.getTopicId(topic), part));
+            int cp = partitionFor(MirrorPartition.of(mirrorName, metadataCache.getTopicId(topic), part));
             byCoordPartition.computeIfAbsent(cp, k -> new HashMap<>())
                 .computeIfAbsent(topic, k -> new HashSet<>()).add(part);
         }));
@@ -321,7 +328,7 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
         byCoordPartition.forEach((cp, tps) -> {
             TopicPartition mirrorStateTp = new TopicPartition(MIRROR_STATE_TOPIC_NAME, cp);
             futures.add(runtime.scheduleReadOperation("read-mirror-states", mirrorStateTp,
-                (shard, offset) -> shard.readPartitionStates(mirrorName, tps)));
+                (shard, offset) -> shard.readPartitionStates(mirrorName, tps, offset)));
         });
 
         // Phase 3: Wait for all shard reads to complete, then merge results by topic.
@@ -374,7 +381,7 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
             partitions.forEach(partition -> {
                 partitionIndices.add(partition.partition());
                 int cp = partitionFor(MirrorPartition.of(
-                    mirrorName, mirrorCache.getTopicId(topic), partition.partition()));
+                    mirrorName, metadataCache.getTopicId(topic), partition.partition()));
                 byCoordPartition.computeIfAbsent(cp, k -> new HashMap<>())
                     .computeIfAbsent(topic, k -> new HashSet<>()).add(partition);
             });
@@ -447,7 +454,7 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
         // Phase 1: Group positions by coordinator shard.
         Map<Integer, Map<TopicPartition, EpochOffset>> byCoordPartition = new HashMap<>();
         lastMirrorPositions.forEach((tp, position) -> {
-            int cp = partitionFor(MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition()));
+            int cp = partitionFor(MirrorPartition.of(mirrorName, metadataCache.getTopicId(tp.topic()), tp.partition()));
             byCoordPartition.computeIfAbsent(cp, k -> new HashMap<>()).put(tp, position);
         });
 
@@ -477,7 +484,7 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
         // Phase 1: Group partitions by coordinator shard.
         Map<Integer, Set<TopicPartition>> byCoordPartition = new HashMap<>();
         partitions.forEach(tp -> {
-            int cp = partitionFor(MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition()));
+            int cp = partitionFor(MirrorPartition.of(mirrorName, metadataCache.getTopicId(tp.topic()), tp.partition()));
             byCoordPartition.computeIfAbsent(cp, k -> new HashSet<>()).add(tp);
         });
 

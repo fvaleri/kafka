@@ -22,7 +22,7 @@ import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.{QuotaManagers, UNBOUNDED_QUOTA}
 import kafka.server.handlers.DescribeTopicPartitionsRequestHandler
 import kafka.server.mirror.MirrorMetadataManager
-import org.apache.kafka.coordinator.mirror.MirrorMetadataCache
+import kafka.server.mirror.MirrorLeaderCache
 import org.apache.kafka.coordinator.mirror.ClusterMirrorCoordinatorService
 import org.apache.kafka.coordinator.mirror.ClusterMirrorCoordinatorService.MirrorStateWrite
 import org.apache.kafka.server.mirror.MirrorPartitionState
@@ -102,7 +102,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val shareCoordinator: ShareCoordinator,
                 val clusterMirrorCoordinator: ClusterMirrorCoordinatorService,
                 val mirrorMetadataManager: MirrorMetadataManager,
-                val mirrorMetadataCache: MirrorMetadataCache,
+                val mirrorMetadataCache: MirrorLeaderCache,
                 val autoTopicCreationManager: AutoTopicCreationManager,
                 val brokerId: Int,
                 val config: KafkaConfig,

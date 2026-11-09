@@ -18,14 +18,13 @@ package kafka.server.mirror
 
 import kafka.cluster.Partition
 import kafka.server._
-import org.apache.kafka.coordinator.mirror.MirrorMetadataCache
 import kafka.server.mirror.MirrorMetadataManager.LEADER_EPOCH_BUMP_THRESHOLD
 import org.apache.kafka.common.errors.{MirrorLeaderEpochExceededException, MirrorPartitionStaleMetadataException}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.coordinator.mirror.MirrorMetadataCache.SourceClusterLeader
+import kafka.server.mirror.MirrorLeaderCache.SourceClusterLeader
 import org.apache.kafka.server.mirror.MirrorPartitionState
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.{LeaderEndPoint, PartitionFetchState}
@@ -47,7 +46,7 @@ class MirrorFetcherThread(name: String,
                           logPrefix: String,
                           mirrorName: String,
                           mirrorFetchBackoffMs: Int,
-                          mirrorCache: Option[MirrorMetadataCache] = None)
+                          mirrorCache: Option[MirrorLeaderCache] = None)
   extends AbstractFetcherThread(name = name,
                                 clientId = name,
                                 leader = leader,
