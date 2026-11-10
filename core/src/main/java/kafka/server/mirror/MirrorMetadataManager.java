@@ -1012,8 +1012,8 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
     }
 
     /**
-     * Writes tombstone records for all locally coordinated partitions of a deleted mirror,
-     * then removes the mirror's data leader cache entries.
+     * Removes the mirror's data leader cache entries and writes tombstone
+     * records for all locally coordinated partitions of a deleted mirror.
      */
     void writeTombstoneRecords(String mirrorName) {
         mirrorCache.removeMirrorPartitions(mirrorName);
