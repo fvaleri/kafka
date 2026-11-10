@@ -24,7 +24,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.{LeaderEndPoint, PartitionFetchState}
-import org.apache.kafka.coordinator.mirror.{ClusterMirrorConfig, MirrorMetadataCache}
+import org.apache.kafka.coordinator.mirror.ClusterMirrorConfig
 import org.apache.kafka.server.network.BrokerEndPoint
 
 import scala.collection.{Map, mutable}
@@ -43,7 +43,7 @@ class MirrorFetcherManager(brokerConfig: KafkaConfig,
                            quotaManager: ReplicationQuotaManager,
                            brokerEpochSupplier: () => Long,
                            metadataCache: MetadataCache,
-                           mirrorCache: Option[MirrorMetadataCache] = None)
+                           mirrorCache: Option[MirrorLeaderCache] = None)
     extends AbstractFetcherManager[MirrorFetcherThread](
       name = "MirrorFetcherManager brokerId=" + brokerConfig.brokerId,
       clientId = "MirrorReplica",

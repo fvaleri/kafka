@@ -73,7 +73,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.mirror.ClusterMirrorConfig;
 import org.apache.kafka.coordinator.mirror.ClusterMirrorConfig.MirrorAclRule;
-import org.apache.kafka.coordinator.mirror.MirrorMetadataCache;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
@@ -129,7 +128,7 @@ class MirrorSourceSyncer {
 
     private final Supplier<ReplicaManager> replicaManagerSupplier;
     private final NodeToControllerChannelManager controllerClient;
-    private final MirrorMetadataCache mirrorCache;
+    private final MirrorLeaderCache mirrorCache;
     private final TransitionHandler transitionHandler;
     private final Consumer<String> tombstoneWriter;
     private final EpochBumpHandler epochBumpHandler;
@@ -158,7 +157,7 @@ class MirrorSourceSyncer {
         KafkaConfig brokerConfig,
         Supplier<ReplicaManager> replicaManagerSupplier,
         NodeToControllerChannelManager controllerClient,
-        MirrorMetadataCache mirrorCache,
+        MirrorLeaderCache mirrorCache,
         TransitionHandler transitionHandler,
         Consumer<String> tombstoneWriter,
         EpochBumpHandler epochBumpHandler
@@ -448,7 +447,7 @@ class MirrorSourceSyncer {
 
     private void retryPendingTombstoneWrites() {
         Set<String> configuredMirrors = mirrorCache.getMirrorNames();
-        Set<String> staleMirrors = mirrorCache.getMirrorPartitions(false).stream()
+        Set<String> staleMirrors = mirrorCache.getMirrorPartitions().stream()
                 .map(MirrorPartition::mirrorName)
                 .filter(name -> !configuredMirrors.contains(name))
                 .collect(Collectors.toSet());
@@ -483,7 +482,7 @@ class MirrorSourceSyncer {
                                 topicImage.partitions().forEach((partitionId, partition) -> {
                                     if (partition.leader == nodeId) {
                                         MirrorPartition key = new MirrorPartition(mirrorName, topicImage.id(),  partitionId);
-                                        MirrorPartitionMetadata mpm = MirrorPartitionMetadata.orEmpty(mirrorCache.getPartitionMetadata(key, false));
+                                        MirrorPartitionMetadata mpm = MirrorPartitionMetadata.orEmpty(mirrorCache.getPartitionMetadata(key));
                                         if (mpm.state() == MirrorPartitionState.FAILED && mpm.retryAttempt() == MirrorPartitionMetadata.NON_RETRYABLE_ERROR) {
                                             log.debug("Skipping transition to FAILED state for partition {}-{} . Reason: Already in this state due to: {}.",
                                                     topic, partitionId, mpm.errorMessage());
@@ -559,7 +558,7 @@ class MirrorSourceSyncer {
             ti.partitions().forEach(pi -> {
                 if (pi.leader() != null) {
                     mirrorCache.updateSourceClusterLeader(mirrorName, pi.topicPartition(),
-                            new MirrorMetadataCache.SourceClusterLeader(Optional.of(pi.leader()), pi.leaderEpoch().orElse(0)));
+                            new MirrorLeaderCache.SourceClusterLeader(Optional.of(pi.leader()), pi.leaderEpoch().orElse(0)));
                 }
             });
 
@@ -698,7 +697,7 @@ class MirrorSourceSyncer {
                         topicImage.partitions().forEach((partitionId, partition) -> {
                             if (partition.leader == nodeId) {
                                 MirrorPartition key = new MirrorPartition(mirrorName, topicImage.id(), partitionId);
-                                MirrorPartitionMetadata mpm = MirrorPartitionMetadata.orEmpty(mirrorCache.getPartitionMetadata(key, false));
+                                MirrorPartitionMetadata mpm = MirrorPartitionMetadata.orEmpty(mirrorCache.getPartitionMetadata(key));
                                 if (mpm.state() == MirrorPartitionState.FAILED && mpm.retryAttempt() == MirrorPartitionMetadata.NON_RETRYABLE_ERROR) {
                                     log.debug("Skipping transition to FAILED state for partition {}. Already in this state due to: {}", name, partition, mpm.errorMessage());
                                 } else {
@@ -1223,7 +1222,7 @@ class MirrorSourceSyncer {
         descriptions.forEach(td -> td.partitions().forEach(pi -> {
             if (pi.leader() != null) {
                 mirrorCache.updateSourceClusterLeader(mirrorName, new TopicPartition(td.name(), pi.partition()),
-                        new MirrorMetadataCache.SourceClusterLeader(Optional.of(pi.leader()), pi.leaderEpoch().orElse(0)));
+                        new MirrorLeaderCache.SourceClusterLeader(Optional.of(pi.leader()), pi.leaderEpoch().orElse(0)));
             }
         }));
     }

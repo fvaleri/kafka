@@ -23,8 +23,8 @@ import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.mirror.MirrorMetadataManager
-import org.apache.kafka.coordinator.mirror.MirrorMetadataCache
-import org.apache.kafka.coordinator.mirror.ClusterMirrorCoordinatorService
+import kafka.server.mirror.MirrorLeaderCache
+import org.apache.kafka.coordinator.mirror.ClusterMirrorCoordinator
 import kafka.server.share.SharePartitionManager
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -131,8 +131,6 @@ class KafkaApisTest extends Logging {
   private val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
   private val groupCoordinator: GroupCoordinator = mock(classOf[GroupCoordinator])
   private val shareCoordinator: ShareCoordinator = mock(classOf[ShareCoordinator])
-  private val mirrorCoordinator: ClusterMirrorCoordinatorService = mock(classOf[ClusterMirrorCoordinatorService])
-  private val mirrorMetadataManager: MirrorMetadataManager = mock(classOf[MirrorMetadataManager])
   private val txnCoordinator: TransactionCoordinator = mock(classOf[TransactionCoordinator])
   private val forwardingManager: ForwardingManager = mock(classOf[ForwardingManager])
   private val autoTopicCreationManager: AutoTopicCreationManager = mock(classOf[AutoTopicCreationManager])
@@ -184,12 +182,6 @@ class KafkaApisTest extends Logging {
     properties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$voterId@localhost:9093")
 
     overrideProperties.foreach( p => properties.put(p._1, p._2))
-    val config = new KafkaConfig(properties)
-
-    val apiVersionManager = new SimpleApiVersionManager(
-      ListenerType.BROKER,
-      true,
-      () => new FinalizedFeatures(MetadataVersion.latestTesting(), util.Map.of[String, java.lang.Short], 0))
 
     setupFeatures(featureVersions)
 
@@ -200,12 +192,12 @@ class KafkaApisTest extends Logging {
       groupCoordinator = groupCoordinator,
       txnCoordinator = txnCoordinator,
       shareCoordinator = shareCoordinator,
-      mirrorCoordinator = mirrorCoordinator,
-      mirrorMetadataManager = mirrorMetadataManager,
-      mirrorMetadataCache = MirrorMetadataCache.empty(metadataCache),
+      mirrorCoordinator = mock(classOf[ClusterMirrorCoordinator]),
+      mirrorMetadataManager = mock(classOf[MirrorMetadataManager]),
+      mirrorCache = MirrorLeaderCache.empty(metadataCache),
       autoTopicCreationManager = autoTopicCreationManager,
       brokerId = brokerId,
-      config = config,
+      config = new KafkaConfig(properties),
       configRepository = configRepository,
       metadataCache = metadataCache,
       metrics = metrics,
@@ -217,7 +209,10 @@ class KafkaApisTest extends Logging {
       clusterId = clusterId,
       time = time,
       tokenManager = null,
-      apiVersionManager = apiVersionManager,
+      apiVersionManager = new SimpleApiVersionManager(
+        ListenerType.BROKER,
+        true,
+        () => new FinalizedFeatures(MetadataVersion.latestTesting(), util.Map.of[String, java.lang.Short], 0)),
       clientMetricsManager = clientMetricsManager,
       groupConfigManager = groupConfigManager,
       brokerEpochSupplier = () => brokerEpoch)

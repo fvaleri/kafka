@@ -26,6 +26,7 @@ import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
 import kafka.server.QuotaFactory.QuotaManagers;
 import kafka.server.ReplicaManager;
+import kafka.server.mirror.MirrorLeaderCache;
 import kafka.server.mirror.MirrorMetadataManager;
 import kafka.server.share.SharePartitionManager;
 
@@ -35,7 +36,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.coordinator.mirror.ClusterMirrorCoordinatorService;
-import org.apache.kafka.coordinator.mirror.MirrorMetadataCache;
 import org.apache.kafka.coordinator.share.ShareCoordinator;
 import org.apache.kafka.metadata.ConfigRepository;
 import org.apache.kafka.metadata.MetadataCache;
@@ -76,7 +76,7 @@ public class KafkaApisBuilder {
     private ShareCoordinator shareCoordinator = null;
     private ClusterMirrorCoordinatorService mirrorCoordinator = null;
     private MirrorMetadataManager mirrorMetadataManager = null;
-    private MirrorMetadataCache mirrorMetadataCache = null;
+    private MirrorLeaderCache mirrorLeaderCache = null;
     private GroupConfigManager groupConfigManager = null;
     private Supplier<Long> brokerEpochSupplier = () -> -1L;
 
@@ -210,8 +210,8 @@ public class KafkaApisBuilder {
         return this;
     }
 
-    public KafkaApisBuilder setMirrorMetadataCache(MirrorMetadataCache mirrorMetadataCache) {
-        this.mirrorMetadataCache = mirrorMetadataCache;
+    public KafkaApisBuilder setMirrorLeaderCache(MirrorLeaderCache mirrorMetadataCache) {
+        this.mirrorLeaderCache = mirrorMetadataCache;
         return this;
     }
 
@@ -223,6 +223,9 @@ public class KafkaApisBuilder {
         if (groupCoordinator == null) throw new RuntimeException("You must set groupCoordinator");
         if (txnCoordinator == null) throw new RuntimeException("You must set txnCoordinator");
         if (shareCoordinator == null) throw new RuntimeException("You must set shareCoordinator");
+        if (mirrorCoordinator == null) throw new RuntimeException("You must set topicMirrorLinkCoordinator");
+        if (mirrorMetadataManager == null) throw new RuntimeException("You must set mirrorMetadataManager");
+        if (mirrorLeaderCache == null) throw new RuntimeException("You must set mirrorLeaderCache");
         if (autoTopicCreationManager == null) throw new RuntimeException("You must set autoTopicCreationManager");
         if (config == null) config = new KafkaConfig(Map.of());
         if (configRepository == null) throw new RuntimeException("You must set configRepository");
@@ -235,9 +238,6 @@ public class KafkaApisBuilder {
         if (brokerTopicStats == null) brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig().isRemoteStorageSystemEnabled());
         if (apiVersionManager == null) throw new RuntimeException("You must set apiVersionManager");
         if (groupConfigManager == null) throw new RuntimeException("You must set groupConfigManager");
-        if (mirrorCoordinator == null) throw new RuntimeException("You must set topicMirrorLinkCoordinator");
-        if (mirrorMetadataManager == null) throw new RuntimeException("You must set mirrorMetadataManager");
-        if (mirrorMetadataCache == null) throw new RuntimeException("You must set mirrorMetadataCache");
 
         return new KafkaApis(requestChannel,
                              forwardingManager,
@@ -247,7 +247,7 @@ public class KafkaApisBuilder {
                              shareCoordinator,
                              mirrorCoordinator,
                              mirrorMetadataManager,
-                             mirrorMetadataCache,
+                             mirrorLeaderCache,
                              autoTopicCreationManager,
                              brokerId,
                              config,

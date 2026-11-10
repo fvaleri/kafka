@@ -47,7 +47,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.mirror.ClusterMirrorCoordinator.MirrorStateWrite;
 import org.apache.kafka.coordinator.mirror.MetadataManagerBridge.CoordinatorReader;
 import org.apache.kafka.coordinator.mirror.MetadataManagerBridge.CoordinatorWriter;
-import org.apache.kafka.coordinator.mirror.MirrorMetadataCache;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.mirror.MirrorPartition;
 import org.apache.kafka.server.mirror.MirrorPartitionMetadata;
@@ -83,7 +82,7 @@ class MirrorCoordinatorSender {
     private final KafkaConfig brokerConfig;
     private final int nodeId;
     private final Supplier<MetadataImage> metadataImageSupplier;
-    private final MirrorMetadataCache mirrorCache;
+    private final MirrorLeaderCache mirrorCache;
     private final Metrics metrics;
     private final Time time;
 
@@ -94,7 +93,7 @@ class MirrorCoordinatorSender {
 
     MirrorCoordinatorSender(KafkaConfig brokerConfig,
                             Supplier<MetadataImage> metadataImageSupplier,
-                            MirrorMetadataCache mirrorCache,
+                            MirrorLeaderCache mirrorCache,
                             Function<MirrorPartition, Integer> coordPartFinder,
                             CoordinatorReader coordinatorReader,
                             CoordinatorWriter coordinatorWriter,
@@ -199,7 +198,7 @@ class MirrorCoordinatorSender {
                         return new ReadMirrorStatesResponse(new ReadMirrorStatesResponseData().setErrorCode(error.code()).setErrorMessage(error.message()));
                     }
 
-                    // update the data leader cache
+                    // Update the data leader cache
                     res.topics().forEach(topic ->
                             topic.partitions().forEach(partition -> {
                                 MirrorPartition mp = MirrorPartition.of(
@@ -213,7 +212,7 @@ class MirrorCoordinatorSender {
                                                 .withErrorMessage(partition.errorMessage())
                                                 .withRetryAttempt(partition.retryAttempt())
                                                 .withPrevState(MirrorPartitionState.fromValue(partition.previousState()))
-                                                .build(), false);
+                                                .build());
                             }));
                     return new ReadMirrorStatesResponse(res);
                 })).orElseGet(() -> CompletableFuture.failedFuture(new IllegalStateException("No local coordinator reader available")));
@@ -221,7 +220,7 @@ class MirrorCoordinatorSender {
 
     /**
      * Read mirror partition states from remote coordinators, batching requests per coordinator node.
-     * Updates the local {@link MirrorMetadataCache} with each response, then returns a merged response
+     * Updates the local {@link MirrorLeaderCache} with each response, then returns a merged response
      * after all nodes have replied.
      */
     CompletableFuture<ReadMirrorStatesResponse> readStateFromRemoteCoordinator(
@@ -290,7 +289,7 @@ class MirrorCoordinatorSender {
                                                     .withErrorMessage(partition.errorMessage())
                                                     .withRetryAttempt(partition.retryAttempt())
                                                     .withPrevState(MirrorPartitionState.fromValue(partition.previousState()))
-                                                    .build(), false);
+                                                    .build());
                                 }));
 
                             synchronized (merged) {
@@ -517,11 +516,11 @@ class MirrorCoordinatorSender {
         return coordinatorWriter.get().writeLastMirrorPositions(mirrorName, positions);
     }
 
-    CompletableFuture<Void> writeMirrorTombstones(String mirrorName, Set<TopicPartition> partitions) {
+    CompletableFuture<Void> writeMirrorTombstones(String mirrorName) {
         if (coordinatorWriter.isEmpty()) {
             return CompletableFuture.completedFuture(null);
         }
-        return coordinatorWriter.get().writeMirrorTombstones(mirrorName, partitions);
+        return coordinatorWriter.get().writeMirrorTombstones(mirrorName);
     }
 
     /**
