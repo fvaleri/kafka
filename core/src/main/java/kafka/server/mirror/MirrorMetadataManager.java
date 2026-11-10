@@ -1033,20 +1033,19 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
      * of a deleted mirror, then removes the mirror's cache entries.
      */
     void writeTombstoneRecords(String mirrorName) {
-        Map<String, Set<Integer>> allPartitions = mirrorCache.getTopicPartitionsMapping(mirrorName);
         Set<TopicPartition> allTpSet = new HashSet<>();
         Map<Integer, Set<TopicPartition>> coordPartitionToMirrorPartitions = new HashMap<>();
-        allPartitions.forEach((topic, parts) -> {
-            Uuid topicId = mirrorCache.getTopicId(topic);
-            for (int partition : parts) {
-                TopicPartition tp = new TopicPartition(topic, partition);
-                allTpSet.add(tp);
-                if (coordSender.isLocalCoordinatorFor(mirrorName, topicId, partition)) {
-                    coordPartitionToMirrorPartitions.computeIfAbsent(
-                            coordSender.coordPartFinder().get().apply(
-                                    MirrorPartition.of(mirrorName, topicId, partition)),
-                            v -> new HashSet<>()).add(tp);
-                }
+        mirrorCache.getMirrorPartitions().forEach(mp -> {
+            if (mp.mirrorName().equals(mirrorName)) {
+                mirrorCache.getTopicName(mp.topicId()).ifPresent(topicName -> {
+                    TopicPartition tp = new TopicPartition(topicName, mp.partition());
+                    allTpSet.add(tp);
+                    if (coordSender.isLocalCoordinatorFor(mirrorName, mp.topicId(), mp.partition())) {
+                        coordPartitionToMirrorPartitions.computeIfAbsent(
+                                coordSender.coordPartFinder().get().apply(mp),
+                                v -> new HashSet<>()).add(tp);
+                    }
+                });
             }
         });
 
@@ -1055,9 +1054,6 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
         removePendingEpochBumpPartitions(allTpSet);
 
         if (coordPartitionToMirrorPartitions.isEmpty()) {
-            allTpSet.forEach(tp ->
-                    mirrorCache.removePartitionMetadata(
-                            MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition())));
             return;
         }
 
@@ -1068,10 +1064,6 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                     if (ex != null) {
                         log.warn("Failed to write tombstone for mirror {}: {}. Will retry later.",
                                 mirrorName, ex.getMessage());
-                    } else {
-                        coordTps.forEach(tp -> mirrorCache.removePartitionMetadata(
-                                MirrorPartition.of(mirrorName,
-                                        mirrorCache.getTopicId(tp.topic()), tp.partition())));
                     }
                 });
     }
