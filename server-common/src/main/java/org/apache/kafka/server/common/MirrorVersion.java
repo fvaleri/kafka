@@ -63,13 +63,9 @@ public enum MirrorVersion implements FeatureVersion {
         return dependencies;
     }
 
-    public boolean isEnabled() {
-        return featureLevel >= MV_1.featureLevel;
-    }
-
     public static boolean isEnabled(Map<String, Short> finalizedFeatures) {
         short featureLevel = finalizedFeatures.getOrDefault(FEATURE_NAME, (short) 0);
-        return MirrorVersion.fromFeatureLevel(featureLevel).isEnabled();
+        return featureLevel >= MV_1.featureLevel;
     }
 
     public static MirrorVersion fromFeatureLevel(short version) {
