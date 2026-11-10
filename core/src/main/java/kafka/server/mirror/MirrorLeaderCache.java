@@ -29,6 +29,9 @@ import org.apache.kafka.server.mirror.MirrorPartition;
 import org.apache.kafka.server.mirror.MirrorPartitionMetadata;
 import org.apache.kafka.server.mirror.MirrorPartitionState;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -50,6 +53,8 @@ import java.util.stream.Collectors;
  * silently rejected to prevent async callback races from overwriting fresher state.
  */
 public class MirrorLeaderCache {
+    private static final Logger LOG = LoggerFactory.getLogger(MirrorLeaderCache.class);
+
     // Data leader partition metadata, populated from coordinator read/write completions.
     // Uses stateEpoch-based optimistic locking to reject stale updates from async callbacks.
     private final Map<MirrorPartition, MirrorPartitionMetadata> mirrorPartitions = new ConcurrentHashMap<>();
@@ -186,12 +191,14 @@ public class MirrorLeaderCache {
 
     /**
      * Updates the data leader's partition metadata using stateEpoch-based optimistic locking.
-     * A stale update (incoming stateEpoch lower than existing) is silently rejected to prevent
-     * async callback races from overwriting fresher state.
+     * A stale update (incoming stateEpoch lower than existing) is rejected to prevent async
+     * callback races from overwriting fresher state.
      */
     public void updatePartitionMetadata(MirrorPartition mp, MirrorPartitionMetadata metadata) {
         mirrorPartitions.compute(mp, (key, existing) -> {
             if (existing != null && existing.stateEpoch() > metadata.stateEpoch()) {
+                LOG.debug("Skipping stale metadata update for {}: existing stateEpoch {} > incoming {}",
+                        mp, existing.stateEpoch(), metadata.stateEpoch());
                 return existing;
             }
             return metadata;
