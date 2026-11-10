@@ -104,6 +104,6 @@ public class ClusterMirrorCoordinatorMetrics extends CoordinatorMetrics {
     }
 
     private static MetricName metricName(String name) {
-        return getMetricName("kafka.server.mirror", "MirrorMetadataManager", name);
+        return getMetricName("org.apache.kafka.coordinator.mirror", "ClusterMirrorCoordinator", name);
     }
 }
