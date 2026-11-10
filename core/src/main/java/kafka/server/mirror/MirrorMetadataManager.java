@@ -1860,11 +1860,23 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
         CompletableFuture<Optional<Errors>> localFuture = localPartitions.isEmpty()
                 ? CompletableFuture.completedFuture(Optional.empty())
                 : coordSender.readStateFromLocalCoordinator(mirrorName, localPartitions)
-                        .thenApply(response -> validateRemotePartitions(response, validStates));
+                        .handle((response, ex) -> {
+                            if (ex != null) {
+                                log.error("Failed to read local coordinator state for mirror {}", mirrorName, ex);
+                                return Optional.of(Errors.COORDINATOR_NOT_AVAILABLE);
+                            }
+                            return validateRemotePartitions(response, validStates);
+                        });
         CompletableFuture<Optional<Errors>> remoteFuture = remotePartitions.isEmpty()
                 ? CompletableFuture.completedFuture(Optional.empty())
                 : coordSender.readStateFromRemoteCoordinator(mirrorName, remotePartitions)
-                        .thenApply(response -> validateRemotePartitions(response, validStates));
+                        .handle((response, ex) -> {
+                            if (ex != null) {
+                                log.error("Failed to read remote coordinator state for mirror {}", mirrorName, ex);
+                                return Optional.of(Errors.COORDINATOR_NOT_AVAILABLE);
+                            }
+                            return validateRemotePartitions(response, validStates);
+                        });
 
         return localFuture.thenCombine(remoteFuture, (localErr, remoteErr) ->
                 new ValidationResult(validationOffset, localErr.isPresent() ? localErr : remoteErr));
