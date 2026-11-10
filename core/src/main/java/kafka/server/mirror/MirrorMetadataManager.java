@@ -75,7 +75,6 @@ import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
 import org.apache.kafka.server.common.NodeToControllerChannelManager;
 import org.apache.kafka.server.common.RequestLocal;
-import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.mirror.MirrorPartition;
 import org.apache.kafka.server.mirror.MirrorPartitionMetadata;
 import org.apache.kafka.server.mirror.MirrorPartitionState;
@@ -156,8 +155,6 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
     private final Map<TopicPartition, MirrorPartitionState> pendingStateTransitions = new ConcurrentHashMap<>();
     private final Set<PendingLeaderEpochBump> pendingLeaderEpochBumps = ConcurrentHashMap.newKeySet();
 
-    private final KafkaMetricsGroup metricsGroup;
-
     public MirrorMetadataManager(
         String clusterId,
         KafkaConfig brokerConfig,
@@ -180,10 +177,6 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
         this.scheduler.startup();
         this.metrics = metrics;
         this.time = time;
-
-        // Partition state gauges are now registered via ClusterMirrorCoordinatorMetrics,
-        // which aggregates across coordinator shards for committed-only counts.
-        this.metricsGroup = new KafkaMetricsGroup(this.getClass());
     }
 
     @Override
@@ -308,16 +301,6 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
         scheduler.shutdown();
         pendingStateTransitions.clear();
         clearAllPendingEpochBumps();
-
-        metricsGroup.removeMetric("LogAlignmentPartitionState");
-        metricsGroup.removeMetric("UleRecoveryPartitionState");
-        metricsGroup.removeMetric("EpochFencingPartitionState");
-        metricsGroup.removeMetric("MirroringPartitionState");
-        metricsGroup.removeMetric("PausingPartitionState");
-        metricsGroup.removeMetric("PausedPartitionState");
-        metricsGroup.removeMetric("StoppingPartitionState");
-        metricsGroup.removeMetric("StoppedPartitionState");
-        metricsGroup.removeMetric("FailedPartitionState");
     }
 
     // ===== STATE TRANSITION OPERATIONS ===============================================================================
