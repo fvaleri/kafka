@@ -1012,37 +1012,14 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
     }
 
     /**
-     * Writes tombstone records for all locally coordinated partitions
-     * of a deleted mirror, then removes the mirror's cache entries.
+     * Writes tombstone records for all locally coordinated partitions of a deleted mirror,
+     * then removes the mirror's data leader cache entries.
      */
     void writeTombstoneRecords(String mirrorName) {
-        Set<TopicPartition> allTpSet = new HashSet<>();
-        Map<Integer, Set<TopicPartition>> coordPartitionToMirrorPartitions = new HashMap<>();
-        mirrorCache.getMirrorPartitions().forEach(mp -> {
-            if (mp.mirrorName().equals(mirrorName)) {
-                mirrorCache.getTopicName(mp.topicId()).ifPresent(topicName -> {
-                    TopicPartition tp = new TopicPartition(topicName, mp.partition());
-                    allTpSet.add(tp);
-                    if (coordSender.isLocalCoordinatorFor(mirrorName, mp.topicId(), mp.partition())) {
-                        coordPartitionToMirrorPartitions.computeIfAbsent(
-                                coordSender.coordPartFinder().get().apply(mp),
-                                v -> new HashSet<>()).add(tp);
-                    }
-                });
-            }
-        });
-
         mirrorCache.removeMirrorPartitions(mirrorName);
         mirrorCache.removeSourceClusterLeaders(mirrorName);
-        removePendingEpochBumpPartitions(allTpSet);
 
-        if (coordPartitionToMirrorPartitions.isEmpty()) {
-            return;
-        }
-
-        Set<TopicPartition> coordTps = coordPartitionToMirrorPartitions.values().stream()
-                .flatMap(Set::stream).collect(Collectors.toSet());
-        coordSender.writeMirrorTombstones(mirrorName, coordTps)
+        coordSender.writeMirrorTombstones(mirrorName)
                 .whenComplete((result, ex) -> {
                     if (ex != null) {
                         log.warn("Failed to write tombstone for mirror {}: {}. Will retry later.",

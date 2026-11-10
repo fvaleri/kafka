@@ -218,10 +218,8 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
                     }
 
                     @Override
-                    public CompletableFuture<Void> writeMirrorTombstones(
-                            String mirrorName,
-                            Set<TopicPartition> partitions) {
-                        return ClusterMirrorCoordinatorService.this.writeMirrorTombstones(mirrorName, partitions);
+                    public CompletableFuture<Void> writeMirrorTombstones(String mirrorName) {
+                        return ClusterMirrorCoordinatorService.this.writeMirrorTombstones(mirrorName);
                     }
                 });
             log.info("Startup complete");
@@ -470,32 +468,23 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
     }
 
     /**
-     * Persists tombstone records for a deleted mirror across coordinator shards.
+     * Writes tombstone records for all partitions of a mirror across all local coordinator shards.
+     * Each shard iterates its own state to find entries for the mirror.
      *
      * @param mirrorName the name of the cluster mirror
-     * @param partitions set of topic partitions to tombstone
      * @return future completed when all tombstone records are persisted
      */
-    public CompletableFuture<Void> writeMirrorTombstones(
-            String mirrorName, Set<TopicPartition> partitions
-    ) {
+    public CompletableFuture<Void> writeMirrorTombstones(String mirrorName) {
         throwIfNotActive();
 
-        // Phase 1: Group partitions by coordinator shard.
-        Map<Integer, Set<TopicPartition>> byCoordPartition = new HashMap<>();
-        partitions.forEach(tp -> {
-            int cp = partitionFor(MirrorPartition.of(mirrorName, metadataCache.getTopicId(tp.topic()), tp.partition()));
-            byCoordPartition.computeIfAbsent(cp, k -> new HashSet<>()).add(tp);
-        });
-
-        // Phase 2: Issue batched tombstone writes to each coordinator shard and wait for completion.
+        int numPartitions = mirrorConfig.stateTopicNumPartitions();
         List<CompletableFuture<Void>> futures = new ArrayList<>();
-        byCoordPartition.forEach((cp, tps) -> {
+        for (int cp = 0; cp < numPartitions; cp++) {
             TopicPartition mirrorStateTp = new TopicPartition(MIRROR_STATE_TOPIC_NAME, cp);
             futures.add(runtime.scheduleWriteOperation("write-mirror-tombstones", mirrorStateTp,
                 Duration.ofMillis(mirrorConfig.coordinatorWriteTimeoutMs()),
-                shard -> shard.writeMirrorTombstones(mirrorName, tps)));
-        });
+                shard -> shard.writeMirrorTombstones(mirrorName)));
+        }
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
     }
 

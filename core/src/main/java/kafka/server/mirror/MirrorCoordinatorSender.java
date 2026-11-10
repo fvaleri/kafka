@@ -516,11 +516,11 @@ class MirrorCoordinatorSender {
         return coordinatorWriter.get().writeLastMirrorPositions(mirrorName, positions);
     }
 
-    CompletableFuture<Void> writeMirrorTombstones(String mirrorName, Set<TopicPartition> partitions) {
+    CompletableFuture<Void> writeMirrorTombstones(String mirrorName) {
         if (coordinatorWriter.isEmpty()) {
             return CompletableFuture.completedFuture(null);
         }
-        return coordinatorWriter.get().writeMirrorTombstones(mirrorName, partitions);
+        return coordinatorWriter.get().writeMirrorTombstones(mirrorName);
     }
 
     /**

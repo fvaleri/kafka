@@ -72,9 +72,6 @@ public interface MetadataManagerBridge {
             Map<TopicPartition, EpochOffset> positions
         );
 
-        CompletableFuture<Void> writeMirrorTombstones(
-            String mirrorName,
-            Set<TopicPartition> partitions
-        );
+        CompletableFuture<Void> writeMirrorTombstones(String mirrorName);
     }
 }

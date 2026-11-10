@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.mirror;
 
 import org.apache.kafka.common.EpochOffset;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.FencedLeaderEpochException;
 import org.apache.kafka.common.errors.FencedStateEpochException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -450,23 +449,22 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
     }
 
     /**
-     * Writes tombstone records for a deleted mirror across all specified partitions.
+     * Writes tombstone records for all partitions of a mirror that this shard owns.
+     * Iterates the shard's own partition metadata to find entries.
      *
-     * @param mirrorName the name of the cluster mirror
-     * @param partitions set of topic partitions to delete
+     * @param mirrorName the name of the cluster mirror being deleted
      * @return coordinator result containing tombstone records to persist
      */
-    public CoordinatorResult<Void, CoordinatorRecord> writeMirrorTombstones(
-        String mirrorName, Set<TopicPartition> partitions
-    ) {
+    public CoordinatorResult<Void, CoordinatorRecord> writeMirrorTombstones(String mirrorName) {
         List<CoordinatorRecord> records = new ArrayList<>();
-        for (TopicPartition tp : partitions) {
-            Uuid topicId = metadataCache.getTopicId(tp.topic());
-            records.add(CoordinatorRecord.tombstone(new MirrorPartitionStateKey()
-                .setMirrorName(mirrorName).setTopicId(topicId).setPartition(tp.partition())));
-            records.add(CoordinatorRecord.tombstone(new LastMirrorEpochsKey()
-                .setMirrorName(mirrorName).setTopicId(topicId).setPartition(tp.partition())));
-        }
+        partitionMetadata.keySet().forEach(mp -> {
+            if (mp.mirrorName().equals(mirrorName)) {
+                records.add(CoordinatorRecord.tombstone(new MirrorPartitionStateKey()
+                    .setMirrorName(mirrorName).setTopicId(mp.topicId()).setPartition(mp.partition())));
+                records.add(CoordinatorRecord.tombstone(new LastMirrorEpochsKey()
+                    .setMirrorName(mirrorName).setTopicId(mp.topicId()).setPartition(mp.partition())));
+            }
+        });
         return new CoordinatorResult<>(records, null);
     }
 
