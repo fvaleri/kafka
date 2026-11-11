@@ -462,6 +462,7 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
     /**
      * Writes tombstone records for all partitions of a mirror across all local coordinator shards.
      * Each shard iterates its own state to find entries for the mirror.
+     * Only shards hosted by this runtime are written; remote shards are handled by their owners.
      *
      * @param mirrorName the name of the cluster mirror
      * @return future completed when all tombstone records are persisted
@@ -469,14 +470,10 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
     public CompletableFuture<Void> writeMirrorTombstones(String mirrorName) {
         throwIfNotActive();
 
-        int numPartitions = mirrorConfig.stateTopicNumPartitions();
-        List<CompletableFuture<Void>> futures = new ArrayList<>();
-        for (int cp = 0; cp < numPartitions; cp++) {
-            TopicPartition mirrorStateTp = new TopicPartition(MIRROR_STATE_TOPIC_NAME, cp);
-            futures.add(runtime.scheduleWriteOperation("write-mirror-tombstones", mirrorStateTp,
-                Duration.ofMillis(mirrorConfig.coordinatorWriteTimeoutMs()),
-                shard -> shard.writeMirrorTombstones(mirrorName)));
-        }
+        List<CompletableFuture<Void>> futures = runtime.scheduleWriteAllOperation(
+            "write-mirror-tombstones",
+            Duration.ofMillis(mirrorConfig.coordinatorWriteTimeoutMs()),
+            shard -> shard.writeMirrorTombstones(mirrorName));
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
     }
 }

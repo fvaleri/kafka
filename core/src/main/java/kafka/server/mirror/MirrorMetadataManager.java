@@ -1015,15 +1015,19 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
      * records for all locally coordinated partitions of a deleted mirror.
      */
     void writeTombstoneRecords(String mirrorName) {
-        mirrorCache.removeMirrorPartitions(mirrorName);
-        mirrorCache.removeSourceClusterLeaders(mirrorName);
+        // Capture partitions before the async write so we can clear pending epoch bumps on success.
+        Set<TopicPartition> mirrorTps = mirrorCache.getPartitionStates(mirrorName).keySet();
 
         coordSender.writeMirrorTombstones(mirrorName)
                 .whenComplete((result, ex) -> {
                     if (ex != null) {
                         log.warn("Failed to write tombstone for mirror {}: {}. Will retry later.",
                                 mirrorName, ex.getMessage());
+                        return;
                     }
+                    mirrorCache.removeMirrorPartitions(mirrorName);
+                    mirrorCache.removeSourceClusterLeaders(mirrorName);
+                    removePendingEpochBumpPartitions(mirrorTps);
                 });
     }
 
