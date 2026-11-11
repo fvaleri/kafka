@@ -53,12 +53,13 @@ public interface MetadataManagerBridge {
     // Delegating the read through the runtime ensures that a shard still loading
     // surfaces as {@code COORDINATOR_LOAD_IN_PROGRESS} instead of returning
     // possibly-incomplete cached state.
-    @FunctionalInterface
     interface CoordinatorReader {
         CompletableFuture<ReadMirrorStatesResponseData> readPartitionStates(
                 String mirrorName,
                 Map<String, Set<Integer>> partitions
         );
+
+        CompletableFuture<Set<String>> listLocalMirrorNames();
     }
 
     interface CoordinatorWriter {

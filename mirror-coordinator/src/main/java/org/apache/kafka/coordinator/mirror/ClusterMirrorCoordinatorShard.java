@@ -54,6 +54,7 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -280,6 +281,17 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
 
     @Override
     public void onNewMetadataImage(CoordinatorMetadataImage newImage, CoordinatorMetadataDelta delta) {
+    }
+
+    /**
+     * Returns the distinct mirror names present in this shard's committed partition metadata.
+     */
+    public Set<String> listMirrorNames(long committedOffset) {
+        Set<String> mirrorNames = new HashSet<>();
+        for (MirrorPartition mp : partitionMetadata.keySet(committedOffset)) {
+            mirrorNames.add(mp.mirrorName());
+        }
+        return mirrorNames;
     }
 
     /**

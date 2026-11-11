@@ -202,7 +202,8 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
         coordSender.startup();
 
         this.sourceSyncer = new MirrorSourceSyncer(brokerConfig, replicaManagerSupplier, controllerClient,
-                mirrorCache, this::transitionTo, this::writeTombstoneRecords, this::maybeBumpLeaderEpochs);
+                mirrorCache, this::transitionTo, this::writeTombstoneRecords,
+                coordSender::listLocalMirrorNames, this::maybeBumpLeaderEpochs);
         sourceSyncer.startup();
 
         this.isInitialized = true;
@@ -315,7 +316,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
         if (metadataImage == null) {
             return;
         }
-        Set<String> configuredMirrors = mirrorCache.getMirrorNames();
+        Set<String> configuredMirrors = mirrorCache.getConfiguredMirrorNames();
         Set<TopicPartition> mirrorLeaders = new HashSet<>();
         metadataImage.topics().topicsByName().forEach((topicName, topicImage) -> {
             if (topicImage.mirrorName() != null && configuredMirrors.contains(topicImage.mirrorName())) {
@@ -344,7 +345,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
      *   4. Watched topic config changes (e.g. remote.storage.enable)
      */
     private Set<TopicPartition> collectPartitionsToTransition(MetadataDelta delta, MetadataImage image) {
-        Set<String> mirrors = mirrorCache.getMirrorNames();
+        Set<String> mirrors = mirrorCache.getConfiguredMirrorNames();
 
         Set<TopicPartition> topicsResult = collectFromTopicsDelta(delta, image, mirrors);
         Set<TopicPartition> configsResult = collectFromConfigsDelta(delta, image, mirrors);
