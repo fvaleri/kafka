@@ -48,7 +48,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{Exit, Time, Utils}
 import org.apache.kafka.common._
-import org.apache.kafka.coordinator.mirror.MirrorMetadataCache
+import kafka.server.mirror.MirrorLeaderCache
 import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionLogConfig}
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
@@ -233,7 +233,7 @@ class ReplicaManager(val config: KafkaConfig,
                      addPartitionsToTxnManager: Option[AddPartitionsToTxnManager] = None,
                      val directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP,
                      val defaultActionQueue: ActionQueue = new DelayedActionQueue,
-                     val mirrorCache: Option[MirrorMetadataCache] = None,
+                     val mirrorCache: Option[MirrorLeaderCache] = None,
                      val mirrorManager: Option[MirrorMetadataManager] = None
                      ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)

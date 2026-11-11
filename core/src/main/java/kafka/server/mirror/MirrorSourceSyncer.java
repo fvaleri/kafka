@@ -73,7 +73,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.mirror.ClusterMirrorConfig;
 import org.apache.kafka.coordinator.mirror.ClusterMirrorConfig.MirrorAclRule;
-import org.apache.kafka.coordinator.mirror.MirrorMetadataCache;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
@@ -129,7 +128,7 @@ class MirrorSourceSyncer {
 
     private final Supplier<ReplicaManager> replicaManagerSupplier;
     private final NodeToControllerChannelManager controllerClient;
-    private final MirrorMetadataCache mirrorCache;
+    private final MirrorLeaderCache mirrorCache;
     private final TransitionHandler transitionHandler;
     private final Consumer<String> tombstoneWriter;
     private final EpochBumpHandler epochBumpHandler;
@@ -158,7 +157,7 @@ class MirrorSourceSyncer {
         KafkaConfig brokerConfig,
         Supplier<ReplicaManager> replicaManagerSupplier,
         NodeToControllerChannelManager controllerClient,
-        MirrorMetadataCache mirrorCache,
+        MirrorLeaderCache mirrorCache,
         TransitionHandler transitionHandler,
         Consumer<String> tombstoneWriter,
         EpochBumpHandler epochBumpHandler
@@ -559,7 +558,7 @@ class MirrorSourceSyncer {
             ti.partitions().forEach(pi -> {
                 if (pi.leader() != null) {
                     mirrorCache.updateSourceClusterLeader(mirrorName, pi.topicPartition(),
-                            new MirrorMetadataCache.SourceClusterLeader(Optional.of(pi.leader()), pi.leaderEpoch().orElse(0)));
+                            new MirrorLeaderCache.SourceClusterLeader(Optional.of(pi.leader()), pi.leaderEpoch().orElse(0)));
                 }
             });
 
@@ -1223,7 +1222,7 @@ class MirrorSourceSyncer {
         descriptions.forEach(td -> td.partitions().forEach(pi -> {
             if (pi.leader() != null) {
                 mirrorCache.updateSourceClusterLeader(mirrorName, new TopicPartition(td.name(), pi.partition()),
-                        new MirrorMetadataCache.SourceClusterLeader(Optional.of(pi.leader()), pi.leaderEpoch().orElse(0)));
+                        new MirrorLeaderCache.SourceClusterLeader(Optional.of(pi.leader()), pi.leaderEpoch().orElse(0)));
             }
         }));
     }

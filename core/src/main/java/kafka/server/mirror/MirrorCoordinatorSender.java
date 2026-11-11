@@ -47,7 +47,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.mirror.ClusterMirrorCoordinator.MirrorStateWrite;
 import org.apache.kafka.coordinator.mirror.MetadataManagerBridge.CoordinatorReader;
 import org.apache.kafka.coordinator.mirror.MetadataManagerBridge.CoordinatorWriter;
-import org.apache.kafka.coordinator.mirror.MirrorMetadataCache;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.mirror.MirrorPartition;
 import org.apache.kafka.server.mirror.MirrorPartitionMetadata;
@@ -83,7 +82,7 @@ class MirrorCoordinatorSender {
     private final KafkaConfig brokerConfig;
     private final int nodeId;
     private final Supplier<MetadataImage> metadataImageSupplier;
-    private final MirrorMetadataCache mirrorCache;
+    private final MirrorLeaderCache mirrorCache;
     private final Metrics metrics;
     private final Time time;
 
@@ -94,7 +93,7 @@ class MirrorCoordinatorSender {
 
     MirrorCoordinatorSender(KafkaConfig brokerConfig,
                             Supplier<MetadataImage> metadataImageSupplier,
-                            MirrorMetadataCache mirrorCache,
+                            MirrorLeaderCache mirrorCache,
                             Function<MirrorPartition, Integer> coordPartFinder,
                             CoordinatorReader coordinatorReader,
                             CoordinatorWriter coordinatorWriter,
@@ -187,21 +186,41 @@ class MirrorCoordinatorSender {
     CompletableFuture<ReadMirrorStatesResponse> readStateFromLocalCoordinator(
             String mirrorName, Map<String, Set<Integer>> partitions) {
         return coordinatorReader.map(reader -> reader.readPartitionStates(mirrorName, partitions)
-                .thenApply(ReadMirrorStatesResponse::new)
-                .exceptionally(ex -> {
-                    Throwable cause = (ex instanceof CompletionException && ex.getCause() != null) ? ex.getCause() : ex;
-                    if (cause instanceof CoordinatorLoadInProgressException) {
-                        log.debug("Failed to read local state for partitions {} (shard loading).", partitions);
-                    } else {
-                        log.warn("Failed to read local state for partitions {}. {}", partitions, cause.getMessage());
+                .handle((res, ex) -> {
+                    if (ex != null) {
+                        Throwable cause = (ex instanceof CompletionException && ex.getCause() != null) ? ex.getCause() : ex;
+                        if (cause instanceof CoordinatorLoadInProgressException) {
+                            log.debug("Failed to read local state for partitions {} (shard loading).", partitions);
+                        } else {
+                            log.warn("Failed to read local state for partitions {}. {}", partitions, cause.getMessage());
+                        }
+                        Errors error = Errors.forException(cause);
+                        return new ReadMirrorStatesResponse(new ReadMirrorStatesResponseData().setErrorCode(error.code()).setErrorMessage(error.message()));
                     }
-                    return new ReadMirrorStatesResponse(new ReadMirrorStatesResponseData());
-                })).orElseGet(() -> CompletableFuture.completedFuture(new ReadMirrorStatesResponse(new ReadMirrorStatesResponseData())));
+
+                    // Update the data leader cache
+                    res.topics().forEach(topic ->
+                            topic.partitions().forEach(partition -> {
+                                MirrorPartition mp = MirrorPartition.of(
+                                        mirrorName, mirrorCache.getTopicId(topic.topicName()), partition.partitionIndex());
+                                mirrorCache.updatePartitionMetadata(mp,
+                                        new MirrorPartitionMetadata.Builder()
+                                                .withState(MirrorPartitionState.fromValue(partition.state()))
+                                                .withStateEpoch(partition.stateEpoch())
+                                                .withLastPosition(new EpochOffset(partition.lastMirrorEpoch(),
+                                                        partition.lastMirrorOffset()))
+                                                .withErrorMessage(partition.errorMessage())
+                                                .withRetryAttempt(partition.retryAttempt())
+                                                .withPrevState(MirrorPartitionState.fromValue(partition.previousState()))
+                                                .build());
+                            }));
+                    return new ReadMirrorStatesResponse(res);
+                })).orElseGet(() -> CompletableFuture.failedFuture(new IllegalStateException("No local coordinator reader available")));
     }
 
     /**
      * Read mirror partition states from remote coordinators, batching requests per coordinator node.
-     * Updates the local {@link MirrorMetadataCache} with each response, then returns a merged response
+     * Updates the local {@link MirrorLeaderCache} with each response, then returns a merged response
      * after all nodes have replied.
      */
     CompletableFuture<ReadMirrorStatesResponse> readStateFromRemoteCoordinator(
@@ -260,6 +279,7 @@ class MirrorCoordinatorSender {
                                 topic.partitions().forEach(partition -> {
                                     MirrorPartition mp = MirrorPartition.of(
                                             mirrorName, mirrorCache.getTopicId(topic.topicName()), partition.partitionIndex());
+                                    // update the data leader cache
                                     mirrorCache.updatePartitionMetadata(mp,
                                             new MirrorPartitionMetadata.Builder()
                                                     .withState(MirrorPartitionState.fromValue(partition.state()))
@@ -425,6 +445,7 @@ class MirrorCoordinatorSender {
                 partitionData.setPartitionIndex(m.partition());
                 partitionData.setErrorMessage(m.errorMessage());
                 partitionData.setNonRetryable(m.nonRetryable());
+                partitionData.setRetryAttempt(m.retryAttempt());
 
                 nodeToTopicPartitions
                     .computeIfAbsent(coordinatorNode, k -> new HashMap<>())
@@ -495,11 +516,11 @@ class MirrorCoordinatorSender {
         return coordinatorWriter.get().writeLastMirrorPositions(mirrorName, positions);
     }
 
-    CompletableFuture<Void> writeMirrorTombstones(String mirrorName, Set<TopicPartition> partitions) {
+    CompletableFuture<Void> writeMirrorTombstones(String mirrorName) {
         if (coordinatorWriter.isEmpty()) {
             return CompletableFuture.completedFuture(null);
         }
-        return coordinatorWriter.get().writeMirrorTombstones(mirrorName, partitions);
+        return coordinatorWriter.get().writeMirrorTombstones(mirrorName);
     }
 
     /**

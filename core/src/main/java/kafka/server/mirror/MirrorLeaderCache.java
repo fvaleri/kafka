@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.mirror;
+package kafka.server.mirror;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -29,6 +29,9 @@ import org.apache.kafka.server.mirror.MirrorPartition;
 import org.apache.kafka.server.mirror.MirrorPartitionMetadata;
 import org.apache.kafka.server.mirror.MirrorPartitionState;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -40,20 +43,31 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * Thread-safe cache for mirroring metadata.
+ * Thread-safe cache for the data leader's working state of mirror partitions.
+ *
+ * This cache holds partition metadata populated from coordinator read/write completions.
+ * Coordinator-side state is owned by the coordinator shard via timeline-backed
+ * data structures, ensuring read-committed semantics and automatic rollback on write failures.
+ *
+ * Updates use stateEpoch-based optimistic locking: a stale update (lower stateEpoch) is
+ * silently rejected to prevent async callback races from overwriting fresher state.
  */
-public class MirrorMetadataCache {
+public class MirrorLeaderCache {
+    private static final Logger LOG = LoggerFactory.getLogger(MirrorLeaderCache.class);
+
+    // Data leader partition metadata, populated from coordinator read/write completions.
+    // Uses stateEpoch-based optimistic locking to reject stale updates from async callbacks.
     private final Map<MirrorPartition, MirrorPartitionMetadata> mirrorPartitions = new ConcurrentHashMap<>();
     private final Map<String, Map<TopicPartition, SourceClusterLeader>> sourceLeaders = new ConcurrentHashMap<>();
 
     private final MetadataCache metadataCache;
     private volatile MetadataImage metadataImage;
 
-    public static MirrorMetadataCache empty(MetadataCache metadataCache) {
-        return new MirrorMetadataCache(metadataCache, MetadataImage.EMPTY);
+    public static MirrorLeaderCache empty(MetadataCache metadataCache) {
+        return new MirrorLeaderCache(metadataCache, MetadataImage.EMPTY);
     }
 
-    private MirrorMetadataCache(MetadataCache metadataCache, MetadataImage metadataImage) {
+    private MirrorLeaderCache(MetadataCache metadataCache, MetadataImage metadataImage) {
         this.metadataCache = metadataCache;
         this.metadataImage = metadataImage;
     }
@@ -157,12 +171,6 @@ public class MirrorMetadataCache {
         return result;
     }
 
-    public long countPartitionsInState(MirrorPartitionState state) {
-        return mirrorPartitions.values().stream()
-                .filter(entry -> entry.state() == state)
-                .count();
-    }
-
     public Map<String, Set<Integer>> getTopicPartitionsMapping(String mirrorName) {
         Map<String, Set<Integer>> result = new HashMap<>();
         metadataImage.topics().topicsById().values().forEach(topicInfo -> {
@@ -181,17 +189,24 @@ public class MirrorMetadataCache {
         return MirrorPartitionMetadata.orEmpty(mirrorPartitions.get(mp));
     }
 
+    /**
+     * Updates the data leader's partition metadata using stateEpoch-based optimistic locking.
+     * A stale update (incoming stateEpoch lower than existing) is rejected to prevent async
+     * callback races from overwriting fresher state.
+     */
     public void updatePartitionMetadata(MirrorPartition mp, MirrorPartitionMetadata metadata) {
-        mirrorPartitions.put(mp, metadata);
+        mirrorPartitions.compute(mp, (key, existing) -> {
+            if (existing != null && existing.stateEpoch() > metadata.stateEpoch()) {
+                LOG.debug("Skipping stale metadata update for {}: existing stateEpoch {} > incoming {}",
+                        mp, existing.stateEpoch(), metadata.stateEpoch());
+                return existing;
+            }
+            return metadata;
+        });
     }
 
     public void removePartitionMetadata(MirrorPartition mp) {
         mirrorPartitions.remove(mp);
-    }
-
-    public void removePartitionMetadata(int coordPartition, int numPartitions) {
-        mirrorPartitions.keySet().removeIf(key ->
-            key.coordinatorPartition(numPartitions) == coordPartition);
     }
 
     public Set<MirrorPartition> getMirrorPartitions() {

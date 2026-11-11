@@ -65,7 +65,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.mirror.ClusterMirrorConfig;
 import org.apache.kafka.coordinator.mirror.ClusterMirrorCoordinator.MirrorStateWrite;
 import org.apache.kafka.coordinator.mirror.MetadataManagerBridge;
-import org.apache.kafka.coordinator.mirror.MirrorMetadataCache;
 import org.apache.kafka.image.ConfigurationDelta;
 import org.apache.kafka.image.LocalReplicaChanges;
 import org.apache.kafka.image.MetadataDelta;
@@ -76,7 +75,6 @@ import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
 import org.apache.kafka.server.common.NodeToControllerChannelManager;
 import org.apache.kafka.server.common.RequestLocal;
-import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.mirror.MirrorPartition;
 import org.apache.kafka.server.mirror.MirrorPartitionMetadata;
 import org.apache.kafka.server.mirror.MirrorPartitionState;
@@ -144,7 +142,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
 
     private final Supplier<ReplicaManager> replicaManagerSupplier;
     private final NodeToControllerChannelManager controllerClient;
-    private final MirrorMetadataCache mirrorCache;
+    private final MirrorLeaderCache mirrorCache;
     private final KafkaScheduler scheduler;
     private final Metrics metrics;
     private final Time time;
@@ -157,14 +155,12 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
     private final Map<TopicPartition, MirrorPartitionState> pendingStateTransitions = new ConcurrentHashMap<>();
     private final Set<PendingLeaderEpochBump> pendingLeaderEpochBumps = ConcurrentHashMap.newKeySet();
 
-    private final KafkaMetricsGroup metricsGroup;
-
     public MirrorMetadataManager(
         String clusterId,
         KafkaConfig brokerConfig,
         NodeToControllerChannelManager controllerClient,
         Supplier<ReplicaManager> replicaManagerSupplier,
-        MirrorMetadataCache mirrorCache,
+        MirrorLeaderCache mirrorCache,
         Metrics metrics,
         Time time
     ) {
@@ -181,17 +177,6 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
         this.scheduler.startup();
         this.metrics = metrics;
         this.time = time;
-
-        this.metricsGroup = new KafkaMetricsGroup(this.getClass());
-        metricsGroup.newGauge("LogAlignmentPartitionState", () -> this.mirrorCache.countPartitionsInState(MirrorPartitionState.LOG_ALIGNMENT));
-        metricsGroup.newGauge("UleRecoveryPartitionState", () -> this.mirrorCache.countPartitionsInState(MirrorPartitionState.ULE_RECOVERY));
-        metricsGroup.newGauge("EpochFencingPartitionState", () -> this.mirrorCache.countPartitionsInState(MirrorPartitionState.EPOCH_FENCING));
-        metricsGroup.newGauge("MirroringPartitionState", () -> this.mirrorCache.countPartitionsInState(MirrorPartitionState.MIRRORING));
-        metricsGroup.newGauge("PausingPartitionState", () -> this.mirrorCache.countPartitionsInState(MirrorPartitionState.PAUSING));
-        metricsGroup.newGauge("PausedPartitionState", () -> this.mirrorCache.countPartitionsInState(MirrorPartitionState.PAUSED));
-        metricsGroup.newGauge("StoppingPartitionState", () -> this.mirrorCache.countPartitionsInState(MirrorPartitionState.STOPPING));
-        metricsGroup.newGauge("StoppedPartitionState", () -> this.mirrorCache.countPartitionsInState(MirrorPartitionState.STOPPED));
-        metricsGroup.newGauge("FailedPartitionState", () -> this.mirrorCache.countPartitionsInState(MirrorPartitionState.FAILED));
     }
 
     @Override
@@ -284,13 +269,11 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
     }
 
     /**
-     * Called when a MirrorCoordinator shard is unloaded.
-     * Clears cached state for partitions that mapped to this shard.
+     * Called after a MirrorCoordinator shard finishes unloading.
      */
     @Override
     public void onShardUnloaded(int coordPartIndex, int numPartitions) {
         log.debug("Coordinator shard {} unloaded", coordPartIndex);
-        mirrorCache.removePartitionMetadata(coordPartIndex, numPartitions);
     }
 
     /**
@@ -318,16 +301,6 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
         scheduler.shutdown();
         pendingStateTransitions.clear();
         clearAllPendingEpochBumps();
-
-        metricsGroup.removeMetric("LogAlignmentPartitionState");
-        metricsGroup.removeMetric("UleRecoveryPartitionState");
-        metricsGroup.removeMetric("EpochFencingPartitionState");
-        metricsGroup.removeMetric("MirroringPartitionState");
-        metricsGroup.removeMetric("PausingPartitionState");
-        metricsGroup.removeMetric("PausedPartitionState");
-        metricsGroup.removeMetric("StoppingPartitionState");
-        metricsGroup.removeMetric("StoppedPartitionState");
-        metricsGroup.removeMetric("FailedPartitionState");
     }
 
     // ===== STATE TRANSITION OPERATIONS ===============================================================================
@@ -720,7 +693,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                         if (partition.errorCode() != Errors.NONE.code()) {
                             partitionEx = Errors.forCode(partition.errorCode()).exception();
                         }
-                        onLocalWriteComplete(mirrorName, tp, targetState, errorMessage, nonRetryable, partitionEx);
+                        onLocalWriteComplete(mirrorName, tp, targetState, errorMessage, nonRetryable, partition.stateEpoch(), partitionEx);
                     }));
                 });
         }
@@ -803,7 +776,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
 
     /** Triggers per-partition side effects (actions) after local coordinator write completes. */
     private void onLocalWriteComplete(String mirrorName, TopicPartition tp, MirrorPartitionState state,
-                                      String errorMessage, boolean nonRetryable, Throwable ex) {
+                                      String errorMessage, boolean nonRetryable, int stateEpoch, Throwable ex) {
         MirrorPartition mp = MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
         if (ex != null) {
             Throwable cause = (ex instanceof CompletionException && ex.getCause() != null) ? ex.getCause() : ex;
@@ -822,9 +795,17 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
             }
             return;
         }
-        if (mirrorCache.getPartitionMetadata(mp).state() == state) {
-            onStateTransition(mirrorName, tp, state);
-        }
+        MirrorPartitionMetadata existing = mirrorCache.getPartitionMetadata(mp);
+        int maxAttempts = new ClusterMirrorConfig(brokerConfig).failedRetryMaxAttempts();
+        mirrorCache.updatePartitionMetadata(mp,
+                new MirrorPartitionMetadata.Builder(existing)
+                        // We must resolve the error info before state change because
+                        // we'll set the prevState based on current state
+                        .withResolvedErrorInfo(state, errorMessage, -1, nonRetryable, maxAttempts)
+                        .withState(state)
+                        .withStateEpoch(stateEpoch)
+                        .build());
+        onStateTransition(mirrorName, tp, state);
     }
 
     /** Triggers per-partition side effects (actions) after remote coordinator write completes. */
@@ -1030,43 +1011,18 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
     }
 
     /**
-     * Writes tombstone records for all locally coordinated partitions
-     * of a deleted mirror, then removes the mirror's cache entries.
+     * Removes the mirror's data leader cache entries and writes tombstone
+     * records for all locally coordinated partitions of a deleted mirror.
      */
     void writeTombstoneRecords(String mirrorName) {
-        Map<TopicPartition, MirrorPartitionState> states = mirrorCache.getPartitionStates(mirrorName);
-        Map<Integer, Set<TopicPartition>> coordPartitionToMirrorPartitions = new HashMap<>();
-        states.forEach((tp, state) -> {
-            if (coordSender.isLocalCoordinatorFor(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition())) {
-                coordPartitionToMirrorPartitions.computeIfAbsent(
-                        coordSender.coordPartFinder().get().apply(
-                                MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition())),
-                        v -> new HashSet<>()).add(tp);
-            }
-        });
-
         mirrorCache.removeMirrorPartitions(mirrorName);
         mirrorCache.removeSourceClusterLeaders(mirrorName);
-        removePendingEpochBumpPartitions(states.keySet());
 
-        if (coordPartitionToMirrorPartitions.isEmpty()) {
-            states.keySet().forEach(tp ->
-                    mirrorCache.removePartitionMetadata(
-                            MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition())));
-            return;
-        }
-
-        Set<TopicPartition> allTps = coordPartitionToMirrorPartitions.values().stream()
-                .flatMap(Set::stream).collect(Collectors.toSet());
-        coordSender.writeMirrorTombstones(mirrorName, allTps)
+        coordSender.writeMirrorTombstones(mirrorName)
                 .whenComplete((result, ex) -> {
                     if (ex != null) {
                         log.warn("Failed to write tombstone for mirror {}: {}. Will retry later.",
                                 mirrorName, ex.getMessage());
-                    } else {
-                        allTps.forEach(tp -> mirrorCache.removePartitionMetadata(
-                                MirrorPartition.of(mirrorName,
-                                        mirrorCache.getTopicId(tp.topic()), tp.partition())));
                     }
                 });
     }
@@ -1164,6 +1120,24 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
             return lastMirrorPositions;
         })
         .orTimeout(brokerConfig.requestTimeoutMs(), TimeUnit.MILLISECONDS);
+    }
+
+    private Map<String, Set<Integer>> collectLocalPartitions(String mirrorName,
+                                                             Set<String> topics,
+                                                             MetadataImage image) {
+        Map<String, Set<Integer>> localPartitions = new HashMap<>();
+        for (String topic : topics) {
+            TopicImage topicImage = image.topics().getTopic(topic);
+            if (topicImage != null) {
+                Uuid topicId = mirrorCache.getTopicId(topic);
+                for (int i = 0; i < topicImage.partitions().size(); i++) {
+                    if (coordSender.isLocalCoordinatorFor(mirrorName, topicId, i)) {
+                        localPartitions.computeIfAbsent(topic, k -> new HashSet<>()).add(i);
+                    }
+                }
+            }
+        }
+        return localPartitions;
     }
 
     private Map<String, Set<Integer>> collectRemotePartitions(String mirrorName,
@@ -1634,7 +1608,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                             if (partition.errorCode() != Errors.NONE.code()) {
                                 partitionEx = Errors.forCode(partition.errorCode()).exception();
                             }
-                            onLocalWriteComplete(mirrorName, tp, state, errorMessage, nonRetryable, partitionEx);
+                            onLocalWriteComplete(mirrorName, tp, state, errorMessage, nonRetryable, partition.stateEpoch(), partitionEx);
                         }));
                     });
         } else {
@@ -1793,7 +1767,6 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                 data.setStateOffset(result.stateOffset());
                 return result.error();
             });
-
     }
 
     public CompletableFuture<Optional<Errors>> validatePauseMirrorStates(PauseMirrorTopicsRequestData data) {
@@ -1830,6 +1803,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
      * Validates partition states on the broker before forwarding to the controller.
      * The controller uses this offset for optimistic locking, rejecting the request
      * if any mirror state changed after the broker's validation.
+     * Routes all coordinator reads through the coordinator API for read-committed semantics.
      */
     private CompletableFuture<ValidationResult> validateMirrorStates(
             String mirrorName,
@@ -1838,35 +1812,53 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
             boolean skipMissingTopics) {
         MetadataImage currentImage = metadataImage;
         long validationOffset = currentImage.offset();
+        Map<String, Set<Integer>> localPartitions = new HashMap<>();
         Map<String, Set<Integer>> remotePartitions = new HashMap<>();
 
-        Optional<Errors> localError = validateLocalPartitions(
-                mirrorName, topicNames, validStates, skipMissingTopics, currentImage, remotePartitions);
-        if (localError.isPresent()) {
-            return CompletableFuture.completedFuture(new ValidationResult(validationOffset, localError));
+        Optional<Errors> metadataError = classifyPartitionsForValidation(
+                mirrorName, topicNames, validStates, skipMissingTopics, currentImage,
+                localPartitions, remotePartitions);
+        if (metadataError.isPresent()) {
+            return CompletableFuture.completedFuture(new ValidationResult(validationOffset, metadataError));
         }
 
-        if (remotePartitions.isEmpty()) {
-            return CompletableFuture.completedFuture(new ValidationResult(validationOffset, Optional.empty()));
-        }
+        // Read local and remote coordinator state through the coordinator API
+        CompletableFuture<Optional<Errors>> localFuture = localPartitions.isEmpty()
+                ? CompletableFuture.completedFuture(Optional.empty())
+                : coordSender.readStateFromLocalCoordinator(mirrorName, localPartitions)
+                        .handle((response, ex) -> {
+                            if (ex != null) {
+                                log.error("Failed to read local coordinator state for mirror {}", mirrorName, ex);
+                                return Optional.of(Errors.COORDINATOR_NOT_AVAILABLE);
+                            }
+                            return validateRemotePartitions(response, validStates);
+                        });
+        CompletableFuture<Optional<Errors>> remoteFuture = remotePartitions.isEmpty()
+                ? CompletableFuture.completedFuture(Optional.empty())
+                : coordSender.readStateFromRemoteCoordinator(mirrorName, remotePartitions)
+                        .handle((response, ex) -> {
+                            if (ex != null) {
+                                log.error("Failed to read remote coordinator state for mirror {}", mirrorName, ex);
+                                return Optional.of(Errors.COORDINATOR_NOT_AVAILABLE);
+                            }
+                            return validateRemotePartitions(response, validStates);
+                        });
 
-        return coordSender.readStateFromRemoteCoordinator(mirrorName, remotePartitions)
-                .handle((response, ex) -> {
-                    if (ex != null) {
-                        log.error("Failed to read state from remote coordinator", ex);
-                        return new ValidationResult(validationOffset, Optional.of(Errors.forException(ex)));
-                    }
-                    return new ValidationResult(validationOffset, validateRemotePartitions(response, validStates));
-                }
-        );
+        return localFuture.thenCombine(remoteFuture, (localErr, remoteErr) ->
+                new ValidationResult(validationOffset, localErr.isPresent() ? localErr : remoteErr));
     }
 
-    private Optional<Errors> validateLocalPartitions(
+    /**
+     * Classifies partitions by metadata-image checks (desired state, topic existence)
+     * and splits them into local vs remote for coordinator reads.
+     */
+    private Optional<Errors> classifyPartitionsForValidation(
             String mirrorName,
             Set<String> topicNames,
             Set<MirrorPartitionState> validStates,
             boolean skipMissingTopics,
             MetadataImage currentImage,
+            Map<String, Set<Integer>> localPartitions,
             Map<String, Set<Integer>> remotePartitions) {
         Set<Byte> validDesiredStateValues = validStates.stream()
                 .map(MirrorPartitionState::value).collect(Collectors.toSet());
@@ -1887,14 +1879,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
             }
             for (int i = 0; i < topicImage.partitions().size(); i++) {
                 if (coordSender.isLocalCoordinatorFor(mirrorName, topicImage.id(), i)) {
-                    MirrorPartitionMetadata cachedEntry = mirrorCache.getPartitionMetadata(
-                            MirrorPartition.of(mirrorName, topicImage.id(), i));
-                    MirrorPartitionState state = cachedEntry != null && cachedEntry.state() != null
-                            ? cachedEntry.state() : MirrorPartitionState.UNKNOWN;
-                    if (!validStates.contains(state)) {
-                        log.error("Partition {}-{} is in {} state, expected one of {}", topic, i, state, validStates);
-                        return Optional.of(Errors.INVALID_CLUSTER_MIRROR_STATE);
-                    }
+                    localPartitions.computeIfAbsent(topic, k -> new HashSet<>()).add(i);
                 } else if (metadataImage.topics().getTopic(MIRROR_STATE_TOPIC_NAME) != null) {
                     remotePartitions.computeIfAbsent(topic, k -> new HashSet<>()).add(i);
                 } else {
@@ -2007,7 +1992,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                             if (partition.errorCode() != Errors.NONE.code()) {
                                 partitionEx = Errors.forCode(partition.errorCode()).exception();
                             }
-                            onLocalWriteComplete(mirrorName, tp, state, null, false, partitionEx);
+                            onLocalWriteComplete(mirrorName, tp, state, null, false, partition.stateEpoch(), partitionEx);
                         }));
                     });
         } else {
@@ -2073,22 +2058,27 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
      * metadata change is processed. For each FAILED partition with a prevState,
      * writes the prevState with retryAttempt reset to 0, ensuring MMM reads the
      * correct state on the next metadata update without exhausted retry attempts.
+     *
+     * Reads both local and remote coordinator state through the coordinator API
+     * to populate the data leader cache before building recovery writes.
      */
     public CompletableFuture<Void> writeRecoveryRecords(String mirrorName, Set<String> topics) {
         if (!coordSender.isInitialized()) {
             return CompletableFuture.completedFuture(null);
         }
 
+        Map<String, Set<Integer>> localPartitions = collectLocalPartitions(mirrorName, topics, metadataImage);
         Map<String, Set<Integer>> remotePartitions = collectRemotePartitions(mirrorName, topics, metadataImage);
 
-        CompletableFuture<Void> readRemoteFuture;
-        if (!remotePartitions.isEmpty()) {
-            readRemoteFuture = coordSender.readStateFromRemoteCoordinator(mirrorName, remotePartitions).thenApply(v -> null);
-        } else {
-            readRemoteFuture = CompletableFuture.completedFuture(null);
-        }
+        CompletableFuture<Void> readLocalFuture = localPartitions.isEmpty()
+                ? CompletableFuture.completedFuture(null)
+                : coordSender.readStateFromLocalCoordinator(mirrorName, localPartitions).thenApply(v -> null);
+        CompletableFuture<Void> readRemoteFuture = remotePartitions.isEmpty()
+                ? CompletableFuture.completedFuture(null)
+                : coordSender.readStateFromRemoteCoordinator(mirrorName, remotePartitions).thenApply(v -> null);
 
-        return readRemoteFuture.thenCompose(v -> executeRecoveryWrites(mirrorName, topics, metadataImage));
+        return CompletableFuture.allOf(readLocalFuture, readRemoteFuture)
+                .thenCompose(v -> executeRecoveryWrites(mirrorName, topics, metadataImage));
     }
 
     private CompletableFuture<Void> executeRecoveryWrites(String mirrorName, Set<String> topics, MetadataImage image) {
@@ -2102,10 +2092,11 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
             }
             for (int i = 0; i < topicImage.partitions().size(); i++) {
                 MirrorPartition mp = MirrorPartition.of(mirrorName, topicImage.id(), i);
+                // Both local and remote coordinator state have been read into the data leader cache
+                // by writeRecoveryRecords before this method is called.
                 MirrorPartitionMetadata mpm = mirrorCache.getPartitionMetadata(mp);
                 if (mpm.state() == MirrorPartitionState.FAILED && mpm.prevState() != null) {
-                    MirrorPartitionState targetState = mpm.prevState();
-                    MirrorStateWrite write = new MirrorStateWrite(i, targetState,
+                    MirrorStateWrite write = new MirrorStateWrite(i, mpm.prevState(),
                             mpm.lastPosition().epoch(), mpm.stateEpoch(), null, null, 0, false);
                     if (coordSender.isLocalCoordinatorFor(mirrorName, topicImage.id(), i)) {
                         localWrites.computeIfAbsent(topic, k -> new HashSet<>()).add(write);

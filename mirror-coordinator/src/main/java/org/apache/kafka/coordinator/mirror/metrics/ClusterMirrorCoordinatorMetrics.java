@@ -20,44 +20,90 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+import org.apache.kafka.server.mirror.MirrorPartitionState;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
+import com.yammer.metrics.core.Gauge;
+import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Aggregates per-shard mirror partition state counts into Yammer gauges.
+ * Each active shard contributes its committed counts; the global gauge
+ * sums across all shards.
+ */
 public class ClusterMirrorCoordinatorMetrics extends CoordinatorMetrics {
+    private final Map<TopicPartition, ClusterMirrorCoordinatorMetricsShard> shards = new ConcurrentHashMap<>();
+    private final MetricsRegistry registry;
+
+    public ClusterMirrorCoordinatorMetrics() {
+        this.registry = KafkaYammerMetrics.defaultRegistry();
+        registerGauges();
+    }
+
     @Override
-    public CoordinatorMetricsShard newMetricsShard(SnapshotRegistry snapshotRegistry, TopicPartition tp) {
-        return new CoordinatorMetricsShard() {
-            @Override
-            public void record(String sensorName) { }
-
-            @Override
-            public void record(String sensorName, double val) { }
-
-            @Override
-            public TopicPartition topicPartition() {
-                return tp;
-            }
-
-            @Override
-            public void commitUpTo(long offset) { }
-        };
+    public ClusterMirrorCoordinatorMetricsShard newMetricsShard(SnapshotRegistry snapshotRegistry, TopicPartition tp) {
+        return new ClusterMirrorCoordinatorMetricsShard(snapshotRegistry, tp);
     }
 
     @Override
     public void activateMetricsShard(CoordinatorMetricsShard shard) {
+        if (!(shard instanceof ClusterMirrorCoordinatorMetricsShard)) {
+            throw new IllegalArgumentException("Expected ClusterMirrorCoordinatorMetricsShard");
+        }
+        shards.put(shard.topicPartition(), (ClusterMirrorCoordinatorMetricsShard) shard);
     }
 
     @Override
     public void deactivateMetricsShard(CoordinatorMetricsShard shard) {
+        shards.remove(shard.topicPartition());
     }
 
     @Override
     public MetricsRegistry registry() {
-        return KafkaYammerMetrics.defaultRegistry();
+        return registry;
     }
 
     @Override
     public void onUpdateLastCommittedOffset(TopicPartition tp, long offset) {
+        CoordinatorMetricsShard shard = shards.get(tp);
+        if (shard != null) {
+            shard.commitUpTo(offset);
+        }
+    }
+
+    private long numPartitionsInState(MirrorPartitionState state) {
+        return shards.values().stream()
+                .mapToLong(shard -> shard.numPartitionsInState(state))
+                .sum();
+    }
+
+    private void registerGauges() {
+        for (MirrorPartitionState state : MirrorPartitionState.values()) {
+            if (state == MirrorPartitionState.UNKNOWN) continue;
+            String gaugeName = toCamelCase(state.name()) + "PartitionState";
+            registry.newGauge(metricName(gaugeName), new Gauge<Long>() {
+                @Override
+                public Long value() {
+                    return numPartitionsInState(state);
+                }
+            });
+        }
+    }
+
+    private static String toCamelCase(String name) {
+        StringBuilder sb = new StringBuilder();
+        for (String part : name.split("_")) {
+            sb.append(part.charAt(0)).append(part.substring(1).toLowerCase(Locale.ROOT));
+        }
+        return sb.toString();
+    }
+
+    private static MetricName metricName(String name) {
+        return getMetricName("org.apache.kafka.coordinator.mirror", "ClusterMirrorCoordinator", name);
     }
 }

@@ -22,8 +22,8 @@ import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.LogManager
 import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
-import kafka.server.mirror.MirrorMetadataManager
-import org.apache.kafka.coordinator.mirror.{ClusterMirrorCoordinator, ClusterMirrorCoordinatorService, MirrorMetadataCache, MirrorCoordinatorRecordSerde}
+import kafka.server.mirror.{MirrorLeaderCache, MirrorMetadataManager}
+import org.apache.kafka.coordinator.mirror.{ClusterMirrorCoordinator, ClusterMirrorCoordinatorService, MirrorCoordinatorRecordSerde}
 import kafka.server.metadata._
 import kafka.server.share.{ShareCoordinatorMetadataCacheHelperImpl, SharePartitionManager}
 import kafka.utils.CoreUtils
@@ -39,7 +39,7 @@ import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.common.runtime.{CoordinatorLoaderImpl, CoordinatorRecord}
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService}
-import org.apache.kafka.coordinator.mirror.metrics.ClusterMirrorCoordinatorRuntimeMetrics
+import org.apache.kafka.coordinator.mirror.metrics.{ClusterMirrorCoordinatorMetrics, ClusterMirrorCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.share.metrics.{ShareCoordinatorMetrics, ShareCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRecordSerde, ShareCoordinatorService}
 import org.apache.kafka.coordinator.transaction.ProducerIdManager
@@ -128,7 +128,7 @@ class BrokerServer(
   var transactionCoordinator: TransactionCoordinator = _
 
   var mirrorCoordinator: ClusterMirrorCoordinator = _
-  var mirrorMetadataCache: MirrorMetadataCache = _
+  var mirrorCache: MirrorLeaderCache = _
   var mirrorMetadataManager: MirrorMetadataManager = _
 
   var shareCoordinator: ShareCoordinator = _
@@ -343,14 +343,14 @@ class BrokerServer(
        */
       val defaultActionQueue = new DelayedActionQueue
 
-      mirrorMetadataCache = MirrorMetadataCache.empty(metadataCache)
+      mirrorCache = MirrorLeaderCache.empty(metadataCache)
 
       mirrorMetadataManager = new MirrorMetadataManager(
         clusterId,
         config,
         clientToControllerChannelManager,
         () => replicaManager,
-        mirrorMetadataCache,
+        mirrorCache,
         metrics,
         time
       )
@@ -372,7 +372,7 @@ class BrokerServer(
         addPartitionsToTxnManager = Some(addPartitionsToTxnManager),
         directoryEventHandler = directoryEventHandler,
         defaultActionQueue = defaultActionQueue,
-        mirrorCache = Some(mirrorMetadataCache),
+        mirrorCache = Some(mirrorCache),
         mirrorManager = Some(mirrorMetadataManager)
       )
 
@@ -472,7 +472,7 @@ class BrokerServer(
         shareCoordinator = shareCoordinator,
         mirrorCoordinator = mirrorCoordinator,
         mirrorMetadataManager = mirrorMetadataManager,
-        mirrorMetadataCache = mirrorMetadataCache,
+        mirrorCache = mirrorCache,
         autoTopicCreationManager = autoTopicCreationManager,
         brokerId = config.nodeId,
         config = config,
@@ -726,25 +726,23 @@ class BrokerServer(
       "cluster-mirror-coordinator-reaper",
       new SystemTimer("cluster-mirror-coordinator")
     )
-    val serde = new MirrorCoordinatorRecordSerde
     val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
       time,
       tp => replicaManager.getLog(tp).toJava,
       tp => replicaManager.getLogEndOffset(tp).map(Long.box).toJava,
-      serde,
+      new MirrorCoordinatorRecordSerde(),
       config.mirrorConfig.coordinatorLoadBufferSize()
     )
-    val writer = new CoordinatorPartitionWriter(replicaManager)
-    val runtimeMetrics = new ClusterMirrorCoordinatorRuntimeMetrics(metrics)
 
     new ClusterMirrorCoordinatorService.Builder(config.brokerId, config.mirrorConfig)
       .withTime(time)
       .withTimer(timer)
       .withLoader(loader)
-      .withWriter(writer)
-      .withCoordinatorRuntimeMetrics(runtimeMetrics)
+      .withWriter(new CoordinatorPartitionWriter(replicaManager))
+      .withCoordinatorRuntimeMetrics(new ClusterMirrorCoordinatorRuntimeMetrics(metrics))
+      .withCoordinatorMetrics(new ClusterMirrorCoordinatorMetrics())
       .withMetadataManager(mirrorMetadataManager)
-      .withMirrorCache(mirrorMetadataCache)
+      .withMetadataCache(metadataCache)
       .withMetrics(metrics)
       .build()
   }
@@ -842,8 +840,8 @@ class BrokerServer(
 
       if (mirrorMetadataManager != null)
         CoreUtils.swallow(mirrorMetadataManager.close(), this)
-      if (mirrorMetadataCache != null)
-        mirrorMetadataCache.clear()
+      if (mirrorCache != null)
+        mirrorCache.clear()
 
       if (assignmentsManager != null)
         CoreUtils.swallow(assignmentsManager.close(), this)
