@@ -122,7 +122,7 @@ public class MirrorLeaderCache {
         return metadataCache.getTopicMetadata(topics, listenerName, allowAutoTopicCreation, supportsAutoTopicCreation);
     }
 
-    public Set<String> getMirrorNames() {
+    public Set<String> getConfiguredMirrorNames() {
         return metadataImage.configs().resourceData().keySet().stream()
                 .filter(resource -> resource.type() == ConfigResource.Type.CLUSTER_MIRROR)
                 .map(ConfigResource::name)

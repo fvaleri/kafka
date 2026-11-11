@@ -367,7 +367,7 @@ class MirrorSourceSyncer {
     private void doSourceClusterMetadataSync() {
         retryPendingTombstoneWrites();
 
-        Set<String> mirrors = mirrorCache.getMirrorNames();
+        Set<String> mirrors = mirrorCache.getConfiguredMirrorNames();
         if (mirrors.isEmpty()) {
             return;
         }
@@ -458,7 +458,7 @@ class MirrorSourceSyncer {
             if (localMirrorNames == null || localMirrorNames.isEmpty()) {
                 return;
             }
-            Set<String> configuredMirrors = mirrorCache.getMirrorNames();
+            Set<String> configuredMirrors = mirrorCache.getConfiguredMirrorNames();
             for (String mirrorName : localMirrorNames) {
                 if (!configuredMirrors.contains(mirrorName)) {
                     log.info("Found orphaned coordinator state for deleted mirror {}. Writing tombstones.", mirrorName);
