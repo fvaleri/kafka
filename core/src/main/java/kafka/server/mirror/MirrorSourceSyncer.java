@@ -131,6 +131,7 @@ class MirrorSourceSyncer {
     private final MirrorLeaderCache mirrorCache;
     private final TransitionHandler transitionHandler;
     private final Consumer<String> tombstoneWriter;
+    private final Supplier<CompletableFuture<Set<String>>> localCoordinatorMirrorNames;
     private final EpochBumpHandler epochBumpHandler;
 
     private final KafkaScheduler periodicScheduler;
@@ -160,6 +161,7 @@ class MirrorSourceSyncer {
         MirrorLeaderCache mirrorCache,
         TransitionHandler transitionHandler,
         Consumer<String> tombstoneWriter,
+        Supplier<CompletableFuture<Set<String>>> localCoordinatorMirrorNames,
         EpochBumpHandler epochBumpHandler
     ) {
         this.brokerConfig = brokerConfig;
@@ -172,6 +174,7 @@ class MirrorSourceSyncer {
         this.mirrorCache = mirrorCache;
         this.transitionHandler = transitionHandler;
         this.tombstoneWriter = tombstoneWriter;
+        this.localCoordinatorMirrorNames = localCoordinatorMirrorNames;
         this.epochBumpHandler = epochBumpHandler;
 
         this.periodicScheduler = new KafkaScheduler(1, true, "mirror-syncer-per");
@@ -446,16 +449,24 @@ class MirrorSourceSyncer {
     }
 
     private void retryPendingTombstoneWrites() {
-        Set<String> configuredMirrors = mirrorCache.getMirrorNames();
-        Set<String> staleMirrors = mirrorCache.getMirrorPartitions().stream()
-                .map(MirrorPartition::mirrorName)
-                .filter(name -> !configuredMirrors.contains(name))
-                .collect(Collectors.toSet());
-        for (String mirrorName : staleMirrors) {
-            log.info("Found stale partition states for deleted mirror {}. Writing tombstones.", mirrorName);
-            tombstoneWriter.accept(mirrorName);
-            metricsGroup.removeMetric("MirrorTopicCount", Map.of("mirrorName", mirrorName));
-        }
+        localCoordinatorMirrorNames.get().whenComplete((localMirrorNames, ex) -> {
+            if (ex != null) {
+                log.warn("Failed to list local coordinator mirror names for tombstone reconcile: {}",
+                        ex.getMessage());
+                return;
+            }
+            if (localMirrorNames == null || localMirrorNames.isEmpty()) {
+                return;
+            }
+            Set<String> configuredMirrors = mirrorCache.getMirrorNames();
+            for (String mirrorName : localMirrorNames) {
+                if (!configuredMirrors.contains(mirrorName)) {
+                    log.info("Found orphaned coordinator state for deleted mirror {}. Writing tombstones.", mirrorName);
+                    tombstoneWriter.accept(mirrorName);
+                    metricsGroup.removeMetric("MirrorTopicCount", Map.of("mirrorName", mirrorName));
+                }
+            }
+        });
     }
 
     private void validateSourceClusterId(String mirrorName) {

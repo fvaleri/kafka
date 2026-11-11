@@ -179,6 +179,16 @@ class MirrorCoordinatorSender {
     // ===== READ OPERATIONS ==========================================================================================
 
     /**
+     * Lists mirror names present in committed state on locally hosted coordinator shards.
+     * Returns an empty set when no local coordinator reader is available.
+     */
+    CompletableFuture<Set<String>> listLocalMirrorNames() {
+        return coordinatorReader
+                .map(CoordinatorReader::listLocalMirrorNames)
+                .orElseGet(() -> CompletableFuture.completedFuture(Set.of()));
+    }
+
+    /**
      * Reads mirror partition states from the local coordinator via {@link CoordinatorReader}.
      * If a shard is still loading, the coordinator responds with {@link CoordinatorLoadInProgressException}
      * and the read returns empty data.

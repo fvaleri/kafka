@@ -19,6 +19,8 @@ package org.apache.kafka.coordinator.mirror;
 import org.apache.kafka.common.EpochOffset;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
+import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.message.ReadMirrorStatesResponseData;
 import org.apache.kafka.common.message.WriteMirrorStatesResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -53,6 +55,7 @@ import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -203,7 +206,19 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
         try {
             mirrorManager.onCoordStartup(
                 this::partitionFor,
-                this::readPartitionStates,
+                new MetadataManagerBridge.CoordinatorReader() {
+                    @Override
+                    public CompletableFuture<ReadMirrorStatesResponseData> readPartitionStates(
+                            String mirrorName,
+                            Map<String, Set<Integer>> partitions) {
+                        return ClusterMirrorCoordinatorService.this.readPartitionStates(mirrorName, partitions);
+                    }
+
+                    @Override
+                    public CompletableFuture<Set<String>> listLocalMirrorNames() {
+                        return ClusterMirrorCoordinatorService.this.listLocalMirrorNames();
+                    }
+                },
                 new MetadataManagerBridge.CoordinatorWriter() {
                     @Override
                     public CompletableFuture<WriteMirrorStatesResponseData> writePartitionStates(
@@ -300,6 +315,34 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
         properties.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, mirrorConfig.stateTopicMinISR());
         properties.put(TopicConfig.RETENTION_MS_CONFIG, -1);
         return properties;
+    }
+
+    /**
+     * Lists distinct mirror names present in committed state across all locally hosted
+     * {@code __mirror_state} shards.
+     */
+    public CompletableFuture<Set<String>> listLocalMirrorNames() {
+        throwIfNotActive();
+
+        List<CompletableFuture<Set<String>>> futures = runtime.scheduleReadAllOperation(
+                "list-local-mirror-names",
+                (shard, offset) -> shard.listMirrorNames(offset)
+            ).stream()
+            .map(future -> future.exceptionally(ex -> {
+                Throwable cause = (ex instanceof CompletionException && ex.getCause() != null) ? ex.getCause() : ex;
+                if (cause instanceof NotCoordinatorException || cause instanceof CoordinatorLoadInProgressException) {
+                    return Set.of();
+                }
+                throw new CompletionException(cause);
+            }))
+            .toList();
+
+        return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
+            .thenApply(v -> {
+                Set<String> mirrorNames = new HashSet<>();
+                futures.forEach(f -> mirrorNames.addAll(f.join()));
+                return mirrorNames;
+            });
     }
 
     @Override
