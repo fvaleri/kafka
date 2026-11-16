@@ -4855,7 +4855,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val partitionDetail = new DescribeClusterMirrorsResponseData.PartitionDetail()
           .setPartitionIndex(partIdx)
           .setStateValue(stateValue)
-          .setRetryAttempt(if (sp != null) sp.retryAttempt() else 0.toShort)
+          .setRetryAttempt(if (sp != null) sp.retryAttempt() else 0: Short)
           .setErrorMessage(if (sp != null) sp.errorMessage() else null)
           .setSourceOffset(if (op != null && isMirroring) op.sourceOffset() else -1L)
           .setDestinationOffset(if (op != null && isMirroring) op.destinationOffset() else -1L)

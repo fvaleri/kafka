@@ -111,7 +111,7 @@ public final class ClusterMirrorConfig extends AbstractConfig {
     private static final String MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_DOC = "The maximum backoff time in milliseconds for retrying a mirror partition in FAILED state.";
 
     public static final String MIRROR_FAILED_RETRY_MAX_ATTEMPTS_CONFIG = "mirror.failed.retry.max.attempts";
-    private static final int MIRROR_FAILED_RETRY_MAX_ATTEMPTS_DEFAULT = 20;
+    private static final short MIRROR_FAILED_RETRY_MAX_ATTEMPTS_DEFAULT = 20;
     private static final String MIRROR_FAILED_RETRY_MAX_ATTEMPTS_DOC = "The maximum number of automatic retry attempts for a mirror partition in FAILED state. " +
             "After this limit is reached, manual intervention is required via the start-mirror-topics command. " +
             "Set to 0 to disable automatic retries.";
@@ -381,7 +381,7 @@ public final class ClusterMirrorConfig extends AbstractConfig {
             .define(MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG, LONG, MIRROR_METADATA_REFRESH_INTERVAL_MS_DEFAULT, atLeast(0L), MEDIUM, MIRROR_METADATA_REFRESH_INTERVAL_MS_DOC)
             .define(MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_CONFIG, LONG, MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_DEFAULT, atLeast(1L), MEDIUM, MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_DOC)
             .define(MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_CONFIG, LONG, MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_DEFAULT, atLeast(1L), MEDIUM, MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_DOC)
-            .define(MIRROR_FAILED_RETRY_MAX_ATTEMPTS_CONFIG, INT, MIRROR_FAILED_RETRY_MAX_ATTEMPTS_DEFAULT, between(0, Short.MAX_VALUE), MEDIUM, MIRROR_FAILED_RETRY_MAX_ATTEMPTS_DOC);
+            .define(MIRROR_FAILED_RETRY_MAX_ATTEMPTS_CONFIG, SHORT, MIRROR_FAILED_RETRY_MAX_ATTEMPTS_DEFAULT, between(0, Short.MAX_VALUE), MEDIUM, MIRROR_FAILED_RETRY_MAX_ATTEMPTS_DOC);
 
     /**
      * Creates a ClusterMirrorConfig from mirror metadata properties stored in the cluster metadata.
@@ -558,8 +558,8 @@ public final class ClusterMirrorConfig extends AbstractConfig {
         return getLong(MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_CONFIG);
     }
 
-    public int failedRetryMaxAttempts() {
-        return getInt(MIRROR_FAILED_RETRY_MAX_ATTEMPTS_CONFIG);
+    public short failedRetryMaxAttempts() {
+        return getShort(MIRROR_FAILED_RETRY_MAX_ATTEMPTS_CONFIG);
     }
 
     public int fetchWaitMaxMs() {

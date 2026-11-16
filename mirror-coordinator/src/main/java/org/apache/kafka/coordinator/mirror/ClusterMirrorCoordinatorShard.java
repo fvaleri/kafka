@@ -308,7 +308,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
                                 mpm.prevState().value() : MirrorPartitionState.UNKNOWN.value())
                         .setLastMirrorEpoch(mpm.lastMirrorEpoch().epoch())
                         .setLastMirrorOffset(mpm.lastMirrorEpoch().offset())
-                        .setRetryAttempt((short) mpm.retryAttempt())
+                        .setRetryAttempt(mpm.retryAttempt())
                         .setErrorMessage(mpm.errorMessage());
                 partitionResults.add(pr);
             });
@@ -385,7 +385,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
      */
     private CoordinatorResult<Integer, CoordinatorRecord> writePartitionState(
             String mirrorName, TopicPartition tp, MirrorPartitionState state, int leaderEpoch,
-            int stateEpoch, String errorMessage, int retryAttempt, boolean nonRetryable,
+            int stateEpoch, String errorMessage, short retryAttempt, boolean nonRetryable,
             Map<MirrorPartition, PendingPartitionState> pendingStates
     ) {
         MirrorPartition mp = MirrorPartition.of(mirrorName, metadataCache.getTopicId(tp.topic()), tp.partition());
@@ -430,7 +430,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
                 .setStateEpoch(newStateEpoch)
                 .setPreviousState(updated.prevState() != null ?
                         updated.prevState().value() : MirrorPartitionState.UNKNOWN.value())
-                .setRetryAttempt((short) updated.retryAttempt())
+                .setRetryAttempt(updated.retryAttempt())
                 .setErrorMessage(updated.errorMessage());
         CoordinatorRecord record = CoordinatorRecord.record(key,
                 new ApiMessageAndVersion(val, MirrorPartitionStateValue.HIGHEST_SUPPORTED_VERSION));

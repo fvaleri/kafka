@@ -29,9 +29,9 @@ import org.apache.kafka.common.EpochOffset;
  * @param prevState       the state before entering FAILED, or null if not applicable
  */
 public record MirrorPartitionMetadata(MirrorPartitionState state, int stateEpoch, EpochOffset lastMirrorEpoch,
-                                      String errorMessage, int retryAttempt, MirrorPartitionState prevState) {
-    public static final MirrorPartitionMetadata EMPTY = new MirrorPartitionMetadata(MirrorPartitionState.UNKNOWN, 0, EpochOffset.EMPTY, null, 0, null);
-    public static final int NON_RETRYABLE_ERROR = -1;
+                                      String errorMessage, short retryAttempt, MirrorPartitionState prevState) {
+    public static final MirrorPartitionMetadata EMPTY = new MirrorPartitionMetadata(MirrorPartitionState.UNKNOWN, 0, EpochOffset.EMPTY, null, (short) 0, null);
+    public static final short NON_RETRYABLE_ERROR = -1;
 
     public static MirrorPartitionMetadata orEmpty(MirrorPartitionMetadata mpm) {
         return mpm != null ? mpm : EMPTY;
@@ -42,7 +42,7 @@ public record MirrorPartitionMetadata(MirrorPartitionState state, int stateEpoch
         private int stateEpoch;
         private EpochOffset lastMirrorEpoch;
         private String errorMessage;
-        private int retryAttempt;
+        private short retryAttempt;
         private MirrorPartitionState prevState;
 
         public Builder() {
@@ -84,7 +84,7 @@ public record MirrorPartitionMetadata(MirrorPartitionState state, int stateEpoch
             return this;
         }
 
-        public Builder withRetryAttempt(int retryAttempt) {
+        public Builder withRetryAttempt(short retryAttempt) {
             this.retryAttempt = retryAttempt;
             return this;
         }
@@ -102,7 +102,7 @@ public record MirrorPartitionMetadata(MirrorPartitionState state, int stateEpoch
          * Otherwise, updates only the error message.
          */
         public Builder withResolvedErrorInfo(MirrorPartitionState newState, String errorMessage,
-                                             int retryAttempt, boolean nonRetryable, int maxRetryAttempts) {
+                                             short retryAttempt, boolean nonRetryable, short maxRetryAttempts) {
             if (retryAttempt != -1) {
                 this.retryAttempt = retryAttempt;
             }
@@ -115,7 +115,7 @@ public record MirrorPartitionMetadata(MirrorPartitionState state, int stateEpoch
                     || newState == MirrorPartitionState.STOPPED
                     || newState == MirrorPartitionState.PAUSED) {
                 this.errorMessage = null;
-                this.retryAttempt = 0;
+                this.retryAttempt = (short) 0;
                 this.prevState = null;
             } else {
                 this.errorMessage = errorMessage;
@@ -164,11 +164,11 @@ public record MirrorPartitionMetadata(MirrorPartitionState state, int stateEpoch
         }
     }
 
-    public int nextAttempt(boolean nonRetryable, int maxAttempts) {
+    public short nextAttempt(boolean nonRetryable, short maxAttempts) {
         if (nonRetryable || retryAttempt == NON_RETRYABLE_ERROR) {
             return NON_RETRYABLE_ERROR;
         }
-        return retryAttempt != 0 ? Math.min(maxAttempts, retryAttempt + 1) : 1;
+        return (short) (retryAttempt != 0 ? Math.min(maxAttempts, retryAttempt + 1) : 1);
     }
 
     public MirrorPartitionState resolvePrevState(MirrorPartitionState currState) {

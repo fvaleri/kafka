@@ -765,7 +765,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
             MirrorStateWrite write = new MirrorStateWrite(tp.partition(), targetState,
                     mirrorCache.getLeaderEpoch(tp),
                     mirrorCache.getPartitionMetadata(mp).stateEpoch(),
-                    null, errorMessage, -1, nonRetryable);
+                    null, errorMessage, (short) -1, nonRetryable);
 
             if (coordSender.isLocalCoordinatorFor(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition())) {
                 localWrites.computeIfAbsent(tp.topic(), k -> new HashSet<>()).add(write);
@@ -796,8 +796,8 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
             }
             return;
         }
-        int maxAttempts = new ClusterMirrorConfig(brokerConfig).failedRetryMaxAttempts();
-        if (mirrorCache.updatePartitionState(mp, state, stateEpoch, errorMessage, -1, nonRetryable, maxAttempts)) {
+        short maxAttempts = new ClusterMirrorConfig(brokerConfig).failedRetryMaxAttempts();
+        if (mirrorCache.updatePartitionState(mp, state, stateEpoch, errorMessage, (short) -1, nonRetryable, maxAttempts)) {
             onStateTransition(mirrorName, tp, state);
         }
     }
@@ -808,8 +808,8 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                                        WriteMirrorStatesResponseData.PartitionResult part) {
         MirrorPartition mp = MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
         if (part.errorCode() == Errors.NONE.code()) {
-            int maxAttempts = new ClusterMirrorConfig(brokerConfig).failedRetryMaxAttempts();
-            if (mirrorCache.updatePartitionState(mp, state, part.stateEpoch(), errorMessage, -1, nonRetryable, maxAttempts)) {
+            short maxAttempts = new ClusterMirrorConfig(brokerConfig).failedRetryMaxAttempts();
+            if (mirrorCache.updatePartitionState(mp, state, part.stateEpoch(), errorMessage, (short) -1, nonRetryable, maxAttempts)) {
                 onStateTransition(mirrorName, tp, state);
             }
         } else if (part.errorCode() == Errors.COORDINATOR_LOAD_IN_PROGRESS.code()) {
@@ -945,7 +945,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
         MirrorPartition mp = MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
         MirrorPartitionMetadata existing = mirrorCache.getPartitionMetadata(mp);
         MirrorStateWrite write = new MirrorStateWrite(tp.partition(), null,
-                mirrorCache.getLeaderEpoch(tp), existing.stateEpoch(), lastMirrorEpoch, null, -1, false);
+                mirrorCache.getLeaderEpoch(tp), existing.stateEpoch(), lastMirrorEpoch, null, (short) -1, false);
 
         CompletableFuture<Integer> writeLmeFuture;
         if (coordSender.isLocalCoordinatorFor(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition())) {
@@ -997,10 +997,10 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
     private void handleFailed(String mirrorName, TopicPartition tp) {
         log.info("Scheduling failed state recovery for partition {}", tp);
         ClusterMirrorConfig mirrorConfig = brokerConfig.mirrorConfig();
-        int maxAttempts = mirrorConfig.failedRetryMaxAttempts();
+        short maxAttempts = mirrorConfig.failedRetryMaxAttempts();
         MirrorPartition mp = MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
         MirrorPartitionMetadata mpm = mirrorCache.getPartitionMetadata(mp);
-        int attempt = mpm.retryAttempt() != 0 ? mpm.retryAttempt() : 1;
+        short attempt = mpm.retryAttempt() != 0 ? mpm.retryAttempt() : (short) 1;
         if (attempt == NON_RETRYABLE_ERROR) {
             log.debug("Skipping retry for partition {} (non-retryable error)", tp);
             return;
@@ -1603,7 +1603,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
         var curState = mirrorCache.getPartitionMetadata(mp);
         int leaderEpoch = mirrorCache.getLeaderEpoch(tp);
         MirrorStateWrite write = new MirrorStateWrite(tp.partition(), state, leaderEpoch, curState.stateEpoch(),
-                null, errorMessage, -1, nonRetryable);
+                null, errorMessage, (short) -1, nonRetryable);
         if (coordSender.isLocalCoordinatorFor(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition())) {
             coordSender.writeStateToLocalCoordinator(mirrorName, Map.of(tp.topic(), Set.of(write)))
                     .whenComplete((data, ex) -> {
@@ -1979,7 +1979,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
         int stateEpoch = mirrorCache.getPartitionMetadata(mp).stateEpoch();
         int leaderEpoch = mirrorCache.getLeaderEpoch(tp);
         MirrorStateWrite write = new MirrorStateWrite(tp.partition(), state, leaderEpoch, stateEpoch,
-                null, null, 0, false);
+                null, null, (short) 0, false);
 
         if (coordSender.isLocalCoordinatorFor(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition())) {
             coordSender.writeStateToLocalCoordinator(mirrorName, Map.of(tp.topic(), Set.of(write)))
@@ -2107,7 +2107,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                 MirrorPartitionMetadata mpm = mirrorCache.getPartitionMetadata(mp);
                 if (mpm.state() == MirrorPartitionState.FAILED && mpm.prevState() != null) {
                     MirrorStateWrite write = new MirrorStateWrite(i, mpm.prevState(),
-                            mpm.lastMirrorEpoch().epoch(), mpm.stateEpoch(), null, null, 0, false);
+                            mpm.lastMirrorEpoch().epoch(), mpm.stateEpoch(), null, null, (short) 0, false);
                     if (coordSender.isLocalCoordinatorFor(mirrorName, topicImage.id(), i)) {
                         localWrites.computeIfAbsent(topic, k -> new HashSet<>()).add(write);
                     } else {

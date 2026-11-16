@@ -44,7 +44,7 @@
           "about": "The last mirror offset, or -1 if not available." },
         { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
           "about": "The error message when transitioning to FAILED, or null otherwise." },
-        { "name": "RetryAttempt", "type": "int32", "versions": "0+", "default": "-1",
+        { "name": "RetryAttempt", "type": "int16", "versions": "0+", "default": "-1",
           "about": "The retry attempt count used during recovery. Set to -1 when unavailable." },
         { "name": "NonRetryable", "type": "bool", "versions": "0+", "default": "false",
           "about": "Whether the failure is non-retryable." }

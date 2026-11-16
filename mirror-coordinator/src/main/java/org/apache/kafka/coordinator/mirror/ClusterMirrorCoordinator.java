@@ -158,7 +158,7 @@ public interface ClusterMirrorCoordinator {
             int stateEpoch,
             EpochOffset lastMirrorEpoch,
             String errorMessage,
-            int retryAttempt,
+            short retryAttempt,
             boolean nonRetryable
     ) { }
 }
