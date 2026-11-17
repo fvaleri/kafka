@@ -25,6 +25,7 @@ import kafka.server.mirror.MirrorMetadataManager
 import kafka.server.mirror.MirrorLeaderCache
 import org.apache.kafka.coordinator.mirror.ClusterMirrorCoordinator
 import org.apache.kafka.coordinator.mirror.ClusterMirrorCoordinator.MirrorStateWrite
+import org.apache.kafka.server.mirror.MirrorPartition
 import org.apache.kafka.server.mirror.MirrorPartitionState
 import org.apache.kafka.server.common.MirrorVersion
 import kafka.server.share.{ShareFetchUtils, SharePartitionManager}
@@ -4266,6 +4267,13 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleCreateClusterMirror(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val mirrorName = request.body[CreateClusterMirrorRequest].data().mirrorName()
+    try {
+      new MirrorPartition(mirrorName, Uuid.ZERO_UUID, 0)
+    } catch {
+      case e: IllegalArgumentException =>
+        throw new InvalidRequestException(e.getMessage, e)
+    }
     ensureMirrorStateTopicExists(request).thenCompose(_ => {
       val future = new CompletableFuture[Unit]()
       forwardingManager.forwardRequest(request, { responseOpt =>
