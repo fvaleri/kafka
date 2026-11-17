@@ -24,11 +24,11 @@
   "fields": [
     { "name": "Topics", "type": "[]TopicState", "versions": "0+", "about": "The topic and partitions state.",
       "fields": [
-        {"name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+        {"name": "TopicName", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
          "about": "The topic name."},
         { "name": "Partitions", "type": "[]LeaderEpochState", "versions": "0+", "about": "The partition leader epochs.",
           "fields": [
-            {"name": "PartitionIndex", "type": "int32", "versions": "0+", "about": "The partition index."},
+            {"name": "PartitionIndex", "type": "int32", "versions": "0+", "mapKey": true, "about": "The partition index."},
             {"name": "MinLeaderEpoch", "type": "int32", "versions": "0+", "default": -1, "about": "The minimum leader epoch that the destination cluster should bump to."}
           ]}
       ]}

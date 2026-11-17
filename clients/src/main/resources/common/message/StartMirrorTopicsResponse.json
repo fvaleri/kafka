@@ -29,7 +29,7 @@
       "about": "The top-level error message, or null if there was no error." },
     { "name": "Topics", "type": "[]TopicResult", "versions": "0+",
       "about": "The results for the topics.", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "TopicName", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name." },
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
         "about": "The error code, or 0 if there was no error." },

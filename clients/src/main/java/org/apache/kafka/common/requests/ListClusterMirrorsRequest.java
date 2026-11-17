@@ -22,7 +22,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.Collections;
 
 /**
  * Possible error codes:
@@ -63,7 +62,7 @@ public class ListClusterMirrorsRequest extends AbstractRequest {
     @Override
     public ListClusterMirrorsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         ListClusterMirrorsResponseData listMirrorsResponseData = new ListClusterMirrorsResponseData()
-            .setMirrors(Collections.emptyList())
+            .setMirrors(new ListClusterMirrorsResponseData.ListedMirrorCollection(0))
             .setErrorCode(Errors.forException(e).code())
             .setThrottleTimeMs(throttleTimeMs);
         return new ListClusterMirrorsResponse(listMirrorsResponseData);

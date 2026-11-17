@@ -236,7 +236,7 @@ class MirrorCoordinatorSender {
             String mirrorName, Map<String, Set<Integer>> partitions) {
         log.debug("Reading states from remote coordinator: {} {}", mirrorName, partitions);
 
-        Map<Node, Map<String, List<ReadMirrorStatesRequestData.PartitionData>>> nodeToTopicPartitions = new HashMap<>();
+        Map<Node, ReadMirrorStatesRequestData.TopicMetadataCollection> nodeToTopics = new HashMap<>();
 
         partitions.forEach((topic, parts) -> {
             parts.forEach(part -> {
@@ -247,34 +247,28 @@ class MirrorCoordinatorSender {
                     return;
                 }
 
-                ReadMirrorStatesRequestData.PartitionData partitionData = new ReadMirrorStatesRequestData.PartitionData();
-                partitionData.setPartitionIndex(part);
-
-                nodeToTopicPartitions
-                        .computeIfAbsent(coordinatorNode, k -> new HashMap<>())
-                        .computeIfAbsent(topic, k -> new ArrayList<>())
-                        .add(partitionData);
+                ReadMirrorStatesRequestData.TopicMetadataCollection topicColl =
+                        nodeToTopics.computeIfAbsent(coordinatorNode, k -> new ReadMirrorStatesRequestData.TopicMetadataCollection());
+                ReadMirrorStatesRequestData.TopicMetadata topicMeta = topicColl.find(topic);
+                if (topicMeta == null) {
+                    topicMeta = new ReadMirrorStatesRequestData.TopicMetadata().setTopicName(topic);
+                    topicColl.add(topicMeta);
+                }
+                topicMeta.partitions().add(new ReadMirrorStatesRequestData.PartitionData().setPartitionIndex(part));
             });
         });
 
-        if (nodeToTopicPartitions.isEmpty()) {
+        if (nodeToTopics.isEmpty()) {
             return CompletableFuture.completedFuture(new ReadMirrorStatesResponse(new ReadMirrorStatesResponseData()));
         }
 
         ReadMirrorStatesResponseData merged = new ReadMirrorStatesResponseData();
-        AtomicInteger remaining = new AtomicInteger(nodeToTopicPartitions.size());
+        AtomicInteger remaining = new AtomicInteger(nodeToTopics.size());
         CompletableFuture<ReadMirrorStatesResponse> future = new CompletableFuture<>();
 
-        nodeToTopicPartitions.forEach((node, topicPartitionsMap) -> {
-            ReadMirrorStatesRequestData data = new ReadMirrorStatesRequestData().setMirrorName(mirrorName);
-            List<ReadMirrorStatesRequestData.TopicMetadata> topicDataList = new ArrayList<>();
-
-            topicPartitionsMap.forEach((topic, partitionDataList) ->
-                    topicDataList.add(new ReadMirrorStatesRequestData.TopicMetadata()
-                            .setTopicName(topic)
-                            .setPartitions(partitionDataList)));
-
-            data.setTopics(topicDataList);
+        nodeToTopics.forEach((node, topicDataList) -> {
+            ReadMirrorStatesRequestData data = new ReadMirrorStatesRequestData().setMirrorName(mirrorName)
+                    .setTopics(topicDataList);
 
             interBrokerSender.enqueue(new RequestAndCompletionHandler(
                     time.milliseconds(),
@@ -302,7 +296,7 @@ class MirrorCoordinatorSender {
                                 }));
 
                             synchronized (merged) {
-                                merged.topics().addAll(readMirrorStatesResponse.data().topics());
+                                readMirrorStatesResponse.data().topics().forEach(t -> merged.topics().add(t.duplicate()));
                                 if (readMirrorStatesResponse.data().errorCode() != Errors.NONE.code()) {
                                     log.error("Failed to read states from remote coordinator: {}-{}",
                                             readMirrorStatesResponse.data().errorCode(), readMirrorStatesResponse.data().errorMessage());
@@ -364,7 +358,7 @@ class MirrorCoordinatorSender {
 
         nodeToTopicPartitions.forEach((node, topicPartitionsMap) -> {
             ReadMirrorOffsetsRequestData data = new ReadMirrorOffsetsRequestData().setMirrorName(mirrorName);
-            List<ReadMirrorOffsetsRequestData.TopicData> topicDataList = new ArrayList<>();
+            ReadMirrorOffsetsRequestData.TopicDataCollection topicDataList = new ReadMirrorOffsetsRequestData.TopicDataCollection();
 
             topicPartitionsMap.forEach((topic, partitionList) ->
                     topicDataList.add(new ReadMirrorOffsetsRequestData.TopicData()
@@ -382,7 +376,7 @@ class MirrorCoordinatorSender {
                             log.debug("Read offsets from remote leader node {} completed. {}", node, response.responseBody());
 
                             synchronized (merged) {
-                                merged.topics().addAll(readOffsetsResponse.data().topics());
+                                readOffsetsResponse.data().topics().forEach(t -> merged.topics().add(t.duplicate()));
                                 if (readOffsetsResponse.data().errorCode() != Errors.NONE.code()) {
                                     log.error("Failed to read offsets from remote leader node {}. {}: {}",
                                             node, readOffsetsResponse.data().errorCode(), readOffsetsResponse.data().errorMessage());
@@ -433,7 +427,7 @@ class MirrorCoordinatorSender {
 
         CompletableFuture<WriteMirrorStatesResponse> resultFuture = new CompletableFuture<>();
 
-        Map<Node, Map<String, List<WriteMirrorStatesRequestData.PartitionData>>> nodeToTopicPartitions = new HashMap<>();
+        Map<Node, WriteMirrorStatesRequestData.TopicMetadataCollection> nodeToTopics = new HashMap<>();
 
         topicMetadata.forEach((topic, metadata) -> {
             metadata.forEach(m -> {
@@ -456,31 +450,28 @@ class MirrorCoordinatorSender {
                 partitionData.setNonRetryable(m.nonRetryable());
                 partitionData.setRetryAttempt(m.retryAttempt());
 
-                nodeToTopicPartitions
-                    .computeIfAbsent(coordinatorNode, k -> new HashMap<>())
-                    .computeIfAbsent(topic, k -> new ArrayList<>())
-                    .add(partitionData);
+                WriteMirrorStatesRequestData.TopicMetadataCollection topicColl =
+                    nodeToTopics.computeIfAbsent(coordinatorNode, k -> new WriteMirrorStatesRequestData.TopicMetadataCollection());
+                WriteMirrorStatesRequestData.TopicMetadata topicMeta = topicColl.find(topic);
+                if (topicMeta == null) {
+                    topicMeta = new WriteMirrorStatesRequestData.TopicMetadata().setTopicName(topic);
+                    topicColl.add(topicMeta);
+                }
+                topicMeta.partitions().add(partitionData);
             });
         });
 
-        if (nodeToTopicPartitions.isEmpty()) {
+        if (nodeToTopics.isEmpty()) {
             resultFuture.complete(new WriteMirrorStatesResponse(new WriteMirrorStatesResponseData()));
             return resultFuture;
         }
 
         WriteMirrorStatesResponseData merged = new WriteMirrorStatesResponseData();
-        AtomicInteger remaining = new AtomicInteger(nodeToTopicPartitions.size());
+        AtomicInteger remaining = new AtomicInteger(nodeToTopics.size());
 
-        nodeToTopicPartitions.forEach((node, topicPartitionsMap) -> {
-            WriteMirrorStatesRequestData data = new WriteMirrorStatesRequestData().setMirrorName(mirrorName);
-            List<WriteMirrorStatesRequestData.TopicMetadata> topicDataList = new ArrayList<>();
-
-            topicPartitionsMap.forEach((topic, partitionDataList) ->
-                topicDataList.add(new WriteMirrorStatesRequestData.TopicMetadata()
-                    .setTopicName(topic)
-                    .setPartitions(partitionDataList)));
-
-            data.setTopics(topicDataList);
+        nodeToTopics.forEach((node, topicDataList) -> {
+            WriteMirrorStatesRequestData data = new WriteMirrorStatesRequestData().setMirrorName(mirrorName)
+                    .setTopics(topicDataList);
 
             interBrokerSender.enqueue(new RequestAndCompletionHandler(
                 time.milliseconds(),
@@ -490,7 +481,7 @@ class MirrorCoordinatorSender {
                     log.debug("Write states to remote coordinator completed: {}", response.responseBody());
                     if (response.responseBody() instanceof WriteMirrorStatesResponse writeMirrorStatesResponse) {
                         synchronized (merged) {
-                            merged.topics().addAll(writeMirrorStatesResponse.data().topics());
+                            writeMirrorStatesResponse.data().topics().forEach(t -> merged.topics().add(t.duplicate()));
                             if (writeMirrorStatesResponse.data().errorCode() != Errors.NONE.code()) {
                                 log.error("Failed to write states to remote coordinator: {}-{}",
                                         writeMirrorStatesResponse.data().errorCode(), writeMirrorStatesResponse.data().errorMessage());
