@@ -4269,9 +4269,9 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleCreateClusterMirror(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val mirrorName = request.body[CreateClusterMirrorRequest].data().mirrorName()
     try {
-      new MirrorPartition(mirrorName, Uuid.ZERO_UUID, 0)
+      MirrorPartition.validateMirrorName(mirrorName)
     } catch {
-      case e: IllegalArgumentException =>
+      case e: InvalidMirrorException =>
         throw new InvalidRequestException(e.getMessage, e)
     }
     ensureMirrorStateTopicExists(request).thenCompose(_ => {

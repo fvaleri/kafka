@@ -139,7 +139,7 @@ class MirrorCoordinatorSender {
         if (image.topics().getTopic(MIRROR_STATE_TOPIC_NAME) != null && coordPartFinder.isPresent()) {
             int coordId = image.topics().getTopic(MIRROR_STATE_TOPIC_NAME)
                     .partitions().get(coordPartFinder.get().apply(
-                            MirrorPartition.of(mirrorName, topicId, partition))).leader;
+                            new MirrorPartition(mirrorName, topicId, partition))).leader;
             return coordId == nodeId;
         }
         return false;
@@ -210,7 +210,7 @@ class MirrorCoordinatorSender {
                     // Update the data leader cache
                     res.topics().forEach(topic ->
                             topic.partitions().forEach(partition -> {
-                                MirrorPartition mp = MirrorPartition.of(
+                                MirrorPartition mp = new MirrorPartition(
                                         mirrorName, mirrorCache.getTopicId(topic.topicName()), partition.partitionIndex());
                                 mirrorCache.updatePartitionMetadata(mp,
                                         new MirrorPartitionMetadata.Builder()
@@ -240,7 +240,7 @@ class MirrorCoordinatorSender {
 
         partitions.forEach((topic, parts) -> {
             parts.forEach(part -> {
-                MirrorPartition mp = MirrorPartition.of(mirrorName, mirrorCache.getTopicId(topic), part);
+                MirrorPartition mp = new MirrorPartition(mirrorName, mirrorCache.getTopicId(topic), part);
                 Node coordinatorNode = findCoordinatorNode(mp);
                 if (coordinatorNode.equals(Node.noNode())) {
                     log.warn("Coordinator is not available for partition {}-{}", topic, part);
@@ -286,7 +286,7 @@ class MirrorCoordinatorSender {
 
                             readMirrorStatesResponse.data().topics().forEach(topic ->
                                 topic.partitions().forEach(partition -> {
-                                    MirrorPartition mp = MirrorPartition.of(
+                                    MirrorPartition mp = new MirrorPartition(
                                             mirrorName, mirrorCache.getTopicId(topic.topicName()), partition.partitionIndex());
                                     // update the data leader cache
                                     mirrorCache.updatePartitionMetadata(mp,
@@ -437,7 +437,7 @@ class MirrorCoordinatorSender {
 
         topicMetadata.forEach((topic, metadata) -> {
             metadata.forEach(m -> {
-                MirrorPartition mp = MirrorPartition.of(mirrorName, mirrorCache.getTopicId(topic), m.partition());
+                MirrorPartition mp = new MirrorPartition(mirrorName, mirrorCache.getTopicId(topic), m.partition());
                 Node coordinatorNode = findCoordinatorNode(mp);
                 if (coordinatorNode.equals(Node.noNode())) {
                     log.error("Coordinator not available for partition {}-{}", topic, m.partition());

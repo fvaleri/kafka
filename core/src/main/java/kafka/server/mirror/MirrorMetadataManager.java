@@ -227,7 +227,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                 topicImage.partitions().forEach((partitionId, partition) -> {
                     if (partition.leader == nodeId) {
                         TopicPartition tp = new TopicPartition(topicName, partitionId);
-                        MirrorPartition mp = MirrorPartition.of(
+                        MirrorPartition mp = new MirrorPartition(
                                 topicImage.mirrorName(), mirrorCache.getTopicId(topicName), partitionId);
                         if (coordSender.coordPartFinder().get().apply(mp) == coordPartition) {
                             mirrorLeaders.add(tp);
@@ -405,7 +405,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
             pendingStateTransitions.remove(tp);
             removePendingEpochBumpPartitions(Set.of(tp));
             if (!coordSender.isLocalCoordinatorFor(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition())) {
-                MirrorPartition mp = MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
+                MirrorPartition mp = new MirrorPartition(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
                 mirrorCache.removePartitionMetadata(mp);
             }
         });
@@ -623,7 +623,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
         boolean pauseRequested = desiredState == MirrorPartitionState.PAUSED;
 
         if (currentState == MirrorPartitionState.FAILED) {
-            MirrorPartition mp = MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
+            MirrorPartition mp = new MirrorPartition(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
             MirrorPartitionMetadata mpm = mirrorCache.getPartitionMetadata(mp);
             transitionTo(mirrorName, Set.of(tp), MirrorPartitionState.FAILED, mpm.errorMessage(), mpm.retryAttempt() == NON_RETRYABLE_ERROR);
         } else if (stopRequested) {
@@ -738,7 +738,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                                     Map<String, Set<MirrorStateWrite>> remoteWrites) {
         for (TopicPartition tp : topicPartitions) {
             MirrorPartitionMetadata entry = mirrorCache.getPartitionMetadata(
-                    MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition()));
+                    new MirrorPartition(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition()));
             MirrorPartitionState currentState = entry != null ? entry.state() : null;
             MirrorPartitionState pendingState = pendingStateTransitions.get(tp);
             if (pendingState != MirrorPartitionState.MIRRORING && pendingState == targetState) {
@@ -761,7 +761,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                 log.info("Transitioning partition {} from {} to {}", tp, currentState, targetState);
             }
 
-            MirrorPartition mp = MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
+            MirrorPartition mp = new MirrorPartition(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
             MirrorStateWrite write = new MirrorStateWrite(tp.partition(), targetState,
                     mirrorCache.getLeaderEpoch(tp),
                     mirrorCache.getPartitionMetadata(mp).stateEpoch(),
@@ -778,7 +778,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
     /** Triggers per-partition side effects (actions) after local coordinator write completes. */
     private void onLocalWriteComplete(String mirrorName, TopicPartition tp, MirrorPartitionState state,
                                       String errorMessage, boolean nonRetryable, int stateEpoch, Throwable ex) {
-        MirrorPartition mp = MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
+        MirrorPartition mp = new MirrorPartition(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
         if (ex != null) {
             Throwable cause = (ex instanceof CompletionException && ex.getCause() != null) ? ex.getCause() : ex;
             if (cause instanceof CoordinatorLoadInProgressException) {
@@ -806,7 +806,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
     private void onRemoteWriteComplete(String mirrorName, TopicPartition tp, MirrorPartitionState state,
                                        String errorMessage, boolean nonRetryable,
                                        WriteMirrorStatesResponseData.PartitionResult part) {
-        MirrorPartition mp = MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
+        MirrorPartition mp = new MirrorPartition(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
         if (part.errorCode() == Errors.NONE.code()) {
             short maxAttempts = new ClusterMirrorConfig(brokerConfig).failedRetryMaxAttempts();
             if (mirrorCache.updatePartitionState(mp, state, part.stateEpoch(), errorMessage, (short) -1, nonRetryable, maxAttempts)) {
@@ -942,7 +942,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
         long latestOffset = logOpt.isDefined() ? logOpt.get().logEndOffset() : -1L;
         EpochOffset lastMirrorEpoch = new EpochOffset(latestEpoch, latestOffset);
 
-        MirrorPartition mp = MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
+        MirrorPartition mp = new MirrorPartition(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
         MirrorPartitionMetadata existing = mirrorCache.getPartitionMetadata(mp);
         MirrorStateWrite write = new MirrorStateWrite(tp.partition(), null,
                 mirrorCache.getLeaderEpoch(tp), existing.stateEpoch(), lastMirrorEpoch, null, (short) -1, false);
@@ -998,7 +998,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
         log.info("Scheduling failed state recovery for partition {}", tp);
         ClusterMirrorConfig mirrorConfig = brokerConfig.mirrorConfig();
         short maxAttempts = mirrorConfig.failedRetryMaxAttempts();
-        MirrorPartition mp = MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
+        MirrorPartition mp = new MirrorPartition(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
         MirrorPartitionMetadata mpm = mirrorCache.getPartitionMetadata(mp);
         short attempt = mpm.retryAttempt() != 0 ? mpm.retryAttempt() : (short) 1;
         if (attempt == NON_RETRYABLE_ERROR) {
@@ -1583,7 +1583,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                         curState, tp, state);
                 return;
             }
-            MirrorPartition mp = MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
+            MirrorPartition mp = new MirrorPartition(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
             mirrorCache.updatePartitionMetadata(mp,
                     new MirrorPartitionMetadata.Builder()
                             .withState(MirrorPartitionState.fromValue(partition.state()))
@@ -1599,7 +1599,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
 
     private void persistState(String mirrorName, TopicPartition tp, MirrorPartitionState state,
                               String errorMessage, boolean nonRetryable) {
-        MirrorPartition mp = MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
+        MirrorPartition mp = new MirrorPartition(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
         var curState = mirrorCache.getPartitionMetadata(mp);
         int leaderEpoch = mirrorCache.getLeaderEpoch(tp);
         MirrorStateWrite write = new MirrorStateWrite(tp.partition(), state, leaderEpoch, curState.stateEpoch(),
@@ -1962,7 +1962,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
      * Only succeeds if partition is in MIRRORING state.
      */
     public void maybeClearFailedStateAndPersist(String mirrorName, TopicPartition tp) {
-        MirrorPartition mp = MirrorPartition.of(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
+        MirrorPartition mp = new MirrorPartition(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
         MirrorPartitionMetadata existing = mirrorCache.getPartitionMetadata(mp);
         MirrorPartitionState state = existing.state();
         if (state != MirrorPartitionState.MIRRORING) {
@@ -2101,7 +2101,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                 continue;
             }
             for (int i = 0; i < topicImage.partitions().size(); i++) {
-                MirrorPartition mp = MirrorPartition.of(mirrorName, topicImage.id(), i);
+                MirrorPartition mp = new MirrorPartition(mirrorName, topicImage.id(), i);
                 // Both local and remote coordinator state have been read into the data leader cache
                 // by writeRecoveryRecords before this method is called.
                 MirrorPartitionMetadata mpm = mirrorCache.getPartitionMetadata(mp);
