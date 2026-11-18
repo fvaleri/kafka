@@ -345,15 +345,15 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
                     data.setErrorMessage(e.getCause().getMessage());
                 } else {
                     // Merge results: a topic's partitions span multiple shards, so group by topic name.
-                    Map<String, List<ReadMirrorStatesResponseData.PartitionResult>> merged = new HashMap<>();
+                    Map<String, ReadMirrorStatesResponseData.PartitionResultCollection> merged = new HashMap<>();
                     futures.forEach(f -> f.join().topics().forEach(topicResult ->
-                        merged.computeIfAbsent(topicResult.topicName(), k -> new ArrayList<>())
-                            .addAll(topicResult.partitions())));
-                    List<ReadMirrorStatesResponseData.TopicResult> topicResults = merged.entrySet().stream()
-                        .map(topicEntry -> new ReadMirrorStatesResponseData.TopicResult()
-                            .setTopicName(topicEntry.getKey())
-                            .setPartitions(topicEntry.getValue()))
-                        .toList();
+                        merged.computeIfAbsent(topicResult.topicName(), k -> new ReadMirrorStatesResponseData.PartitionResultCollection())
+                            .addAll(topicResult.partitions().stream().map(ReadMirrorStatesResponseData.PartitionResult::duplicate).toList())));
+                    ReadMirrorStatesResponseData.TopicResultCollection topicResults = new ReadMirrorStatesResponseData.TopicResultCollection();
+                    merged.forEach((topicName, partitionResults) ->
+                        topicResults.add(new ReadMirrorStatesResponseData.TopicResult()
+                            .setTopicName(topicName)
+                            .setPartitions(partitionResults)));
                     data.setTopics(topicResults);
                 }
                 resultFuture.complete(data);
@@ -435,9 +435,9 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
                     futures.forEach(f -> allResults.putAll(f.join()));
 
                     // Build response: organize results by topic, preserving partition order.
-                    List<WriteMirrorStatesResponseData.TopicResult> topicResults = new ArrayList<>();
+                    WriteMirrorStatesResponseData.TopicResultCollection topicResults = new WriteMirrorStatesResponseData.TopicResultCollection();
                     tps.forEach((topic, indices) -> {
-                        List<WriteMirrorStatesResponseData.PartitionResult> partitionResults = new ArrayList<>();
+                        WriteMirrorStatesResponseData.PartitionResultCollection partitionResults = new WriteMirrorStatesResponseData.PartitionResultCollection();
                         indices.forEach(i -> {
                             TopicPartition tp = new TopicPartition(topic, i);
                             ClusterMirrorCoordinatorShard.PartitionWriteResult pwr = allResults.get(tp);

@@ -26,11 +26,11 @@
       "about": "The cluster mirror name." },
     { "name": "Topics", "type": "[]TopicMetadata", "versions": "0+",
       "about": "The data for the topics.", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "TopicName", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
         "about": "The data for the partitions.", "fields": [
-        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+", "mapKey": true,
           "about": "The partition index." },
         { "name": "State", "type": "int8", "versions": "0+",
           "about": "The mirror partition state." },

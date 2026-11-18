@@ -955,11 +955,10 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                     if (data.errorCode() != Errors.NONE.code()) {
                         throw Errors.forCode(data.errorCode()).exception();
                     }
-                    var result = data.topics().stream()
-                            .filter(topic -> topic.topicName().equals(tp.topic()))
-                            .flatMap(topic -> topic.partitions().stream())
-                            .filter(partition -> partition.partitionIndex() == tp.partition())
-                            .findFirst().orElseThrow(() -> Errors.COORDINATOR_NOT_AVAILABLE.exception());
+                    var topicResult = data.topics().find(tp.topic());
+                    if (topicResult == null) throw Errors.COORDINATOR_NOT_AVAILABLE.exception();
+                    var result = topicResult.partitions().find(tp.partition());
+                    if (result == null) throw Errors.COORDINATOR_NOT_AVAILABLE.exception();
                     return result.stateEpoch();
                 });
         } else {
@@ -969,11 +968,10 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                     if (response.data().errorCode() != Errors.NONE.code()) {
                         throw Errors.forCode(response.data().errorCode()).exception();
                     }
-                    var result = response.data().topics().stream()
-                            .filter(topic -> topic.topicName().equals(tp.topic()))
-                            .flatMap(topic -> topic.partitions().stream())
-                            .filter(partition -> partition.partitionIndex() == tp.partition())
-                            .findFirst().orElseThrow(() -> Errors.COORDINATOR_NOT_AVAILABLE.exception());
+                    var topicResult = response.data().topics().find(tp.topic());
+                    if (topicResult == null) throw Errors.COORDINATOR_NOT_AVAILABLE.exception();
+                    var result = topicResult.partitions().find(tp.partition());
+                    if (result == null) throw Errors.COORDINATOR_NOT_AVAILABLE.exception();
                     if (result.errorCode() != Errors.NONE.code()) {
                         throw Errors.forCode(result.errorCode()).exception();
                     }
@@ -1310,20 +1308,15 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
 
         log.info("Sending bump leader epoch request: {}", partitionMinEpochs);
 
-        List<BumpLeaderEpochsRequestData.TopicState> topicStates = new ArrayList<>();
-        Map<String, Set<Integer>> partitions = new HashMap<>();
-        partitionMinEpochs.keySet().forEach(
-                tp -> partitions.computeIfAbsent(tp.topic(), key -> new HashSet<>()).add(tp.partition()));
-        partitions.forEach((topic, parts) -> {
-            BumpLeaderEpochsRequestData.TopicState topicState = new BumpLeaderEpochsRequestData.TopicState();
-            List<BumpLeaderEpochsRequestData.LeaderEpochState> topicLeaderEpoch = new ArrayList<>();
-            parts.forEach(partitionId -> {
-                TopicPartition tp = new TopicPartition(topic, partitionId);
-                topicLeaderEpoch.add(new BumpLeaderEpochsRequestData.LeaderEpochState()
-                        .setMinLeaderEpoch(partitionMinEpochs.get(tp)).setPartitionIndex(partitionId));
-            });
-            topicState.setTopicName(topic).setPartitions(topicLeaderEpoch);
-            topicStates.add(topicState);
+        BumpLeaderEpochsRequestData.TopicStateCollection topicStates = new BumpLeaderEpochsRequestData.TopicStateCollection();
+        partitionMinEpochs.forEach((tp, minEpoch) -> {
+            BumpLeaderEpochsRequestData.TopicState topicState = topicStates.find(tp.topic());
+            if (topicState == null) {
+                topicState = new BumpLeaderEpochsRequestData.TopicState().setTopicName(tp.topic());
+                topicStates.add(topicState);
+            }
+            topicState.partitions().add(new BumpLeaderEpochsRequestData.LeaderEpochState()
+                    .setMinLeaderEpoch(minEpoch).setPartitionIndex(tp.partition()));
         });
 
         controllerClient.sendRequest(new BumpLeaderEpochsRequest.Builder(

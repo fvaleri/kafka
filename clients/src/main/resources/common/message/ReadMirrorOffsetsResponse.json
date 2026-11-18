@@ -29,11 +29,11 @@
       "about": "The top-level error message, or null if there was no error." },
     { "name": "Topics", "type": "[]TopicResult", "versions": "0+",
       "about": "The topic results.", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "TopicName", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Partitions", "type": "[]PartitionResult", "versions": "0+",
         "about": "The per-partition offset results.", "fields": [
-        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+", "mapKey": true,
           "about": "The partition index." },
         { "name": "SourceOffset", "type": "int64", "versions": "0+", "default": "-1",
           "about": "The source cluster high watermark, or -1 if not available." },

@@ -1243,8 +1243,10 @@ public class RequestResponseTest {
     }
 
     private StartMirrorTopicsResponse createStartMirrorTopicsResponse() {
+        StartMirrorTopicsResponseData.TopicResultCollection topics = new StartMirrorTopicsResponseData.TopicResultCollection();
+        topics.add(new StartMirrorTopicsResponseData.TopicResult().setTopicName("topic"));
         StartMirrorTopicsResponseData data = new StartMirrorTopicsResponseData()
-                .setTopics(List.of(new StartMirrorTopicsResponseData.TopicResult().setTopicName("topic")));
+                .setTopics(topics);
         return new StartMirrorTopicsResponse(data);
     }
 
@@ -1260,8 +1262,10 @@ public class RequestResponseTest {
     }
 
     private StopMirrorTopicsResponse createStopMirrorTopicsResponse() {
+        StopMirrorTopicsResponseData.TopicResultCollection topics = new StopMirrorTopicsResponseData.TopicResultCollection();
+        topics.add(new StopMirrorTopicsResponseData.TopicResult().setTopicName("topic"));
         StopMirrorTopicsResponseData data = new StopMirrorTopicsResponseData()
-                .setTopics(List.of(new StopMirrorTopicsResponseData.TopicResult().setTopicName("topic")));
+                .setTopics(topics);
         return new StopMirrorTopicsResponse(data);
     }
 
@@ -1271,12 +1275,13 @@ public class RequestResponseTest {
     }
 
     public ListClusterMirrorsResponse createListClusterMirrorsResponse() {
+        ListClusterMirrorsResponseData.ListedMirrorCollection mirrors = new ListClusterMirrorsResponseData.ListedMirrorCollection();
+        mirrors.add(new ListClusterMirrorsResponseData.ListedMirror()
+                .setMirrorName("mirror")
+                .setSourceBootstrap("bootstrap")
+                .setSourceClusterId("clusterId"));
         ListClusterMirrorsResponseData data = new ListClusterMirrorsResponseData()
-                .setMirrors(List.of(new ListClusterMirrorsResponseData.ListedMirror()
-                        .setMirrorName("mirror")
-                        .setSourceBootstrap("bootstrap")
-                        .setSourceClusterId("clusterId")
-                ));
+                .setMirrors(mirrors);
         return new ListClusterMirrorsResponse(data);
     }
 
@@ -1290,67 +1295,82 @@ public class RequestResponseTest {
     }
 
     public DescribeClusterMirrorsResponse createDescribeClusterMirrorsResponse() {
+        DescribeClusterMirrorsResponseData.PartitionDetailCollection partitions = new DescribeClusterMirrorsResponseData.PartitionDetailCollection();
+        partitions.add(new DescribeClusterMirrorsResponseData.PartitionDetail()
+                .setPartitionIndex(0)
+                .setStateValue("MIRRORING")
+                .setDestinationOffset(0)
+                .setSourceOffset(100)
+                .setLastMirrorEpoch(-1)
+                .setLastMirrorOffset(-1));
+        DescribeClusterMirrorsResponseData.TopicResultCollection topics = new DescribeClusterMirrorsResponseData.TopicResultCollection();
+        topics.add(new DescribeClusterMirrorsResponseData.TopicResult()
+                .setTopicName("topic")
+                .setPartitions(partitions));
+        DescribeClusterMirrorsResponseData.DescribedMirrorCollection mirrors = new DescribeClusterMirrorsResponseData.DescribedMirrorCollection();
+        mirrors.add(new DescribeClusterMirrorsResponseData.DescribedMirror()
+                .setMirrorName("mirror")
+                .setTopics(topics));
         DescribeClusterMirrorsResponseData data = new DescribeClusterMirrorsResponseData()
-                .setMirrors(List.of(new DescribeClusterMirrorsResponseData.DescribedMirror()
-                        .setMirrorName("mirror")
-                        .setTopics(List.of(new DescribeClusterMirrorsResponseData.TopicResult()
-                                .setTopicName("topic")
-                                .setPartitions(List.of(new DescribeClusterMirrorsResponseData.PartitionDetail()
-                                        .setPartitionIndex(0)
-                                        .setStateValue("MIRRORING")
-                                        .setDestinationOffset(0)
-                                        .setSourceOffset(100)
-                                        .setLastMirrorEpoch(-1)
-                                        .setLastMirrorOffset(-1)
-                                ))
-                        ))));
+                .setMirrors(mirrors);
         return new DescribeClusterMirrorsResponse(data);
     }
 
     public ReadMirrorStatesRequest createReadMirrorStatesRequest(short version) {
+        ReadMirrorStatesRequestData.PartitionDataCollection partitions = new ReadMirrorStatesRequestData.PartitionDataCollection();
+        partitions.add(new ReadMirrorStatesRequestData.PartitionData().setPartitionIndex(0));
+        ReadMirrorStatesRequestData.TopicMetadataCollection topics = new ReadMirrorStatesRequestData.TopicMetadataCollection();
+        topics.add(new ReadMirrorStatesRequestData.TopicMetadata()
+                .setTopicName("topic")
+                .setPartitions(partitions));
         ReadMirrorStatesRequestData data = new ReadMirrorStatesRequestData()
                 .setMirrorName("mirror")
-                .setTopics(List.of(new ReadMirrorStatesRequestData.TopicMetadata()
-                        .setTopicName("topic")
-                        .setPartitions(List.of(new ReadMirrorStatesRequestData.PartitionData().setPartitionIndex(0)))
-                ));
+                .setTopics(topics);
         return new ReadMirrorStatesRequest.Builder(data).build(version);
     }
 
     public ReadMirrorStatesResponse createReadMirrorStatesResponse() {
+        ReadMirrorStatesResponseData.PartitionResultCollection partitions = new ReadMirrorStatesResponseData.PartitionResultCollection();
+        partitions.add(new ReadMirrorStatesResponseData.PartitionResult()
+                .setState((byte) 0)
+                .setPartitionIndex(0)
+                .setLastMirrorEpoch(0)
+                .setLastMirrorOffset(0));
+        ReadMirrorStatesResponseData.TopicResultCollection topics = new ReadMirrorStatesResponseData.TopicResultCollection();
+        topics.add(new ReadMirrorStatesResponseData.TopicResult()
+                .setTopicName("topic")
+                .setPartitions(partitions));
         ReadMirrorStatesResponseData data = new ReadMirrorStatesResponseData()
-                .setTopics(List.of(new ReadMirrorStatesResponseData.TopicResult()
-                        .setTopicName("topic")
-                        .setPartitions(List.of(new ReadMirrorStatesResponseData.PartitionResult()
-                                .setState((byte) 0)
-                                .setPartitionIndex(0)
-                                .setLastMirrorEpoch(0)
-                                .setLastMirrorOffset(0)
-                        ))));
+                .setTopics(topics);
         return new ReadMirrorStatesResponse(data);
     }
 
     public WriteMirrorStatesRequest createWriteMirrorStatesRequest(short version) {
+        WriteMirrorStatesRequestData.PartitionDataCollection partitions = new WriteMirrorStatesRequestData.PartitionDataCollection();
+        partitions.add(new WriteMirrorStatesRequestData.PartitionData()
+                .setPartitionIndex(0)
+                .setLastMirrorEpoch(0)
+                .setLastMirrorOffset(0)
+                .setState((byte) 0));
+        WriteMirrorStatesRequestData.TopicMetadataCollection topics = new WriteMirrorStatesRequestData.TopicMetadataCollection();
+        topics.add(new WriteMirrorStatesRequestData.TopicMetadata()
+                .setTopicName("topic")
+                .setPartitions(partitions));
         WriteMirrorStatesRequestData data = new WriteMirrorStatesRequestData()
                 .setMirrorName("mirror")
-                .setTopics(List.of(new WriteMirrorStatesRequestData.TopicMetadata()
-                        .setTopicName("topic")
-                        .setPartitions(List.of(new WriteMirrorStatesRequestData.PartitionData()
-                                .setPartitionIndex(0)
-                                .setLastMirrorEpoch(0)
-                                .setLastMirrorOffset(0)
-                                .setState((byte) 0)
-                        ))
-                ));
+                .setTopics(topics);
         return new WriteMirrorStatesRequest.Builder(data).build(version);
     }
 
     public WriteMirrorStatesResponse createWriteMirrorStatesResponse() {
+        WriteMirrorStatesResponseData.PartitionResultCollection partitions = new WriteMirrorStatesResponseData.PartitionResultCollection();
+        partitions.add(new WriteMirrorStatesResponseData.PartitionResult().setPartitionIndex(0));
+        WriteMirrorStatesResponseData.TopicResultCollection topics = new WriteMirrorStatesResponseData.TopicResultCollection();
+        topics.add(new WriteMirrorStatesResponseData.TopicResult()
+                .setTopicName("topic")
+                .setPartitions(partitions));
         WriteMirrorStatesResponseData data = new WriteMirrorStatesResponseData()
-                .setTopics(List.of(new WriteMirrorStatesResponseData.TopicResult()
-                        .setTopicName("topic")
-                        .setPartitions(List.of(new WriteMirrorStatesResponseData.PartitionResult().setPartitionIndex(0)))
-                ));
+                .setTopics(topics);
         return new WriteMirrorStatesResponse(data);
     }
 
@@ -1366,9 +1386,10 @@ public class RequestResponseTest {
     }
 
     public PauseMirrorTopicsResponse createPauseMirrorTopicsResponse() {
+        PauseMirrorTopicsResponseData.TopicResultCollection topics = new PauseMirrorTopicsResponseData.TopicResultCollection();
+        topics.add(new PauseMirrorTopicsResponseData.TopicResult().setTopicName("topic"));
         PauseMirrorTopicsResponseData data = new PauseMirrorTopicsResponseData()
-                .setTopics(List.of(new PauseMirrorTopicsResponseData.TopicResult()
-                        .setTopicName("topic")));
+                .setTopics(topics);
         return new PauseMirrorTopicsResponse(data);
     }
 
@@ -1384,10 +1405,10 @@ public class RequestResponseTest {
     }
 
     public ResumeMirrorTopicsResponse createResumeMirrorTopicsResponse() {
+        ResumeMirrorTopicsResponseData.TopicResultCollection topics = new ResumeMirrorTopicsResponseData.TopicResultCollection();
+        topics.add(new ResumeMirrorTopicsResponseData.TopicResult().setTopicName("topic"));
         ResumeMirrorTopicsResponseData data = new ResumeMirrorTopicsResponseData()
-                .setTopics(List.of(new ResumeMirrorTopicsResponseData.TopicResult()
-                        .setTopicName("topic")
-                ));
+                .setTopics(topics);
         return new ResumeMirrorTopicsResponse(data);
     }
 
@@ -1403,36 +1424,42 @@ public class RequestResponseTest {
     }
 
     public ReadMirrorOffsetsRequest createReadMirrorOffsetsRequest(short version) {
+        ReadMirrorOffsetsRequestData.TopicDataCollection topics = new ReadMirrorOffsetsRequestData.TopicDataCollection();
+        topics.add(new ReadMirrorOffsetsRequestData.TopicData()
+                .setTopicName("topic")
+                .setPartitions(List.of(0)));
         ReadMirrorOffsetsRequestData data = new ReadMirrorOffsetsRequestData()
                 .setMirrorName("mirror")
-                .setTopics(List.of(new ReadMirrorOffsetsRequestData.TopicData()
-                        .setTopicName("topic")
-                        .setPartitions(List.of(0))
-                ));
+                .setTopics(topics);
         return new ReadMirrorOffsetsRequest.Builder(data).build(version);
     }
 
     public ReadMirrorOffsetsResponse createReadMirrorOffsetsResponse() {
+        ReadMirrorOffsetsResponseData.PartitionResultCollection partitions = new ReadMirrorOffsetsResponseData.PartitionResultCollection();
+        partitions.add(new ReadMirrorOffsetsResponseData.PartitionResult()
+                .setPartitionIndex(0)
+                .setSourceOffset(100)
+                .setDestinationOffset(50));
+        ReadMirrorOffsetsResponseData.TopicResultCollection topics = new ReadMirrorOffsetsResponseData.TopicResultCollection();
+        topics.add(new ReadMirrorOffsetsResponseData.TopicResult()
+                .setTopicName("topic")
+                .setPartitions(partitions));
         ReadMirrorOffsetsResponseData data = new ReadMirrorOffsetsResponseData()
-                .setTopics(List.of(new ReadMirrorOffsetsResponseData.TopicResult()
-                        .setTopicName("topic")
-                        .setPartitions(List.of(new ReadMirrorOffsetsResponseData.PartitionResult()
-                                .setPartitionIndex(0)
-                                .setSourceOffset(100)
-                                .setDestinationOffset(50)
-                        ))
-                ));
+                .setTopics(topics);
         return new ReadMirrorOffsetsResponse(data);
     }
 
     public BumpLeaderEpochsRequest createBumpLeaderEpochsRequest(short version) {
+        BumpLeaderEpochsRequestData.LeaderEpochStateCollection partitions = new BumpLeaderEpochsRequestData.LeaderEpochStateCollection();
+        partitions.add(new BumpLeaderEpochsRequestData.LeaderEpochState()
+                .setMinLeaderEpoch(1)
+                .setPartitionIndex(1));
+        BumpLeaderEpochsRequestData.TopicStateCollection topics = new BumpLeaderEpochsRequestData.TopicStateCollection();
+        topics.add(new BumpLeaderEpochsRequestData.TopicState()
+                .setTopicName("topic")
+                .setPartitions(partitions));
         BumpLeaderEpochsRequestData data = new BumpLeaderEpochsRequestData()
-                .setTopics(List.of(new BumpLeaderEpochsRequestData.TopicState()
-                        .setTopicName("topic")
-                        .setPartitions(List.of(new BumpLeaderEpochsRequestData.LeaderEpochState()
-                                .setMinLeaderEpoch(1)
-                                .setPartitionIndex(1)
-                        ))));
+                .setTopics(topics);
         return new BumpLeaderEpochsRequest.Builder(data).build(version);
     }
 

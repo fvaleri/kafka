@@ -33,7 +33,7 @@
         "about": "The per-mirror error code (e.g. authorization failure), or 0 if there was no error." },
       { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
         "about": "The per-mirror error message, or null if there was no error." },
-      { "name": "MirrorName", "type": "string", "versions": "0+", "entityType": "mirrorName",
+      { "name": "MirrorName", "type": "string", "versions": "0+", "mapKey": true, "entityType": "mirrorName",
         "about": "The cluster mirror name." },
       { "name": "SourceBootstrap", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
         "about": "The source cluster bootstrap servers, or null if not available." },
@@ -43,11 +43,11 @@
         "about": "32-bit bitfield representing authorized operations for this mirror." },
       { "name": "Topics", "type": "[]TopicResult", "versions": "0+",
         "about": "The topic results.", "fields": [
-        { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+        { "name": "TopicName", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
           "about": "The topic name." },
         { "name": "Partitions", "type": "[]PartitionDetail", "versions": "0+",
           "about": "The partition details.", "fields": [
-          { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+          { "name": "PartitionIndex", "type": "int32", "versions": "0+", "mapKey": true,
             "about": "The partition index." },
           { "name": "StateValue", "type": "string", "versions": "0+",
             "about": "The mirror partition state or UNKNOWN if not actively mirroring or IncludeMirrorState is disabled." },

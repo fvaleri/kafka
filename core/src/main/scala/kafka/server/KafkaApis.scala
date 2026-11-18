@@ -4602,7 +4602,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       EnumSet.of(MirrorPartitionState.MIRRORING, MirrorPartitionState.PAUSED)
     }
 
-    val mirrors = new util.ArrayList[ListClusterMirrorsResponseData.ListedMirror]()
+    val mirrors = new ListClusterMirrorsResponseData.ListedMirrorCollection()
     mirrorCache.getConfiguredMirrorNames().asScala
       .filter(mirrorName => authHelper.authorize(request.context, DESCRIBE, CLUSTER_MIRROR, mirrorName, logIfDenied = false))
       .filter(mirrorName => mirrorNameFilter == null || mirrorNameFilter.contains(mirrorName))
@@ -4843,7 +4843,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       topicsMap.getOrElseUpdate(topicName, {
         new DescribeClusterMirrorsResponseData.TopicResult()
           .setTopicName(topicName)
-          .setPartitions(new util.ArrayList[DescribeClusterMirrorsResponseData.PartitionDetail]())
+          .setPartitions(new DescribeClusterMirrorsResponseData.PartitionDetailCollection())
       })
     }
 
@@ -4878,9 +4878,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (topicsMap.nonEmpty) {
-      val topicsList = new util.ArrayList[DescribeClusterMirrorsResponseData.TopicResult]()
-      topicsMap.values.foreach(tp => topicsList.add(tp))
-      describedMirror.setTopics(topicsList)
+      val topicsCollection = new DescribeClusterMirrorsResponseData.TopicResultCollection()
+      topicsMap.values.foreach(tp => topicsCollection.add(tp))
+      describedMirror.setTopics(topicsCollection)
     }
   }
 
@@ -4951,12 +4951,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     val offsetInfoMap = replicaManager.getMirrorOffsetInfo(mirrorName)
 
     val responseData = new ReadMirrorOffsetsResponseData()
-    val topicResults = new util.ArrayList[ReadMirrorOffsetsResponseData.TopicResult]()
+    val topicResults = new ReadMirrorOffsetsResponseData.TopicResultCollection()
 
     readOffsetsRequest.data().topics().forEach { topicData =>
       val topicResult = new ReadMirrorOffsetsResponseData.TopicResult()
         .setTopicName(topicData.topicName())
-      val partitionResults = new util.ArrayList[ReadMirrorOffsetsResponseData.PartitionResult]()
+      val partitionResults = new ReadMirrorOffsetsResponseData.PartitionResultCollection()
 
       topicData.partitions().forEach { partitionIndex =>
         val tp = new TopicPartition(topicData.topicName(), partitionIndex)

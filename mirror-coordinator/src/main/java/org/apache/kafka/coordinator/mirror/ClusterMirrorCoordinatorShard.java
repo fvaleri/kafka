@@ -289,9 +289,9 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
             String mirrorName, Map<String, Set<Integer>> partitions, long committedOffset
     ) {
         ReadMirrorStatesResponseData data = new ReadMirrorStatesResponseData();
-        List<ReadMirrorStatesResponseData.TopicResult> topicResults = new ArrayList<>();
+        ReadMirrorStatesResponseData.TopicResultCollection topicResults = new ReadMirrorStatesResponseData.TopicResultCollection();
         partitions.forEach((topic, parts) -> {
-            List<ReadMirrorStatesResponseData.PartitionResult> partitionResults = new ArrayList<>();
+            ReadMirrorStatesResponseData.PartitionResultCollection partitionResults = new ReadMirrorStatesResponseData.PartitionResultCollection();
             parts.forEach(part -> {
                 MirrorPartition mp = new MirrorPartition(mirrorName, metadataCache.getTopicId(topic), part);
                 // Read at committed offset to ensure only committed state is returned

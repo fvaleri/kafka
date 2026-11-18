@@ -26,7 +26,7 @@
       "about": "The cluster mirror name." },
     { "name": "Topics", "type": "[]TopicData", "versions": "0+",
       "about": "The topics to read offsets for.", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "TopicName", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
         "about": "The partition indexes." }

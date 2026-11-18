@@ -278,7 +278,7 @@ public class ConfigurationControlManager {
             return ControllerResult.of(records, data);
         }
 
-        List<StartMirrorTopicsResponseData.TopicResult> topicResList = new ArrayList<>();
+        StartMirrorTopicsResponseData.TopicResultCollection topicResList = new StartMirrorTopicsResponseData.TopicResultCollection();
         for (Controller.MirrorTopicMetadata topic : topics) {
             StartMirrorTopicsResponseData.TopicResult topicRes = new StartMirrorTopicsResponseData.TopicResult();
             String topicName = topic.name();
@@ -391,7 +391,7 @@ public class ConfigurationControlManager {
             return ControllerResult.of(records, data);
         }
 
-        List<StopMirrorTopicsResponseData.TopicResult> topicResList = new ArrayList<>();
+        StopMirrorTopicsResponseData.TopicResultCollection topicResList = new StopMirrorTopicsResponseData.TopicResultCollection();
         for (String topic : topics) {
             StopMirrorTopicsResponseData.TopicResult topicRes = new StopMirrorTopicsResponseData.TopicResult();
             Uuid topicId = replicationControl.getTopicId(topic);
@@ -451,7 +451,7 @@ public class ConfigurationControlManager {
             return ControllerResult.of(records, data);
         }
 
-        List<PauseMirrorTopicsResponseData.TopicResult> topicResList = new ArrayList<>();
+        PauseMirrorTopicsResponseData.TopicResultCollection topicResList = new PauseMirrorTopicsResponseData.TopicResultCollection();
         for (String topic : topics) {
             PauseMirrorTopicsResponseData.TopicResult topicRes = new PauseMirrorTopicsResponseData.TopicResult();
             Uuid topicId = replicationControl.getTopicId(topic);
@@ -515,7 +515,7 @@ public class ConfigurationControlManager {
             return ControllerResult.of(records, data);
         }
 
-        List<ResumeMirrorTopicsResponseData.TopicResult> topicResList = new ArrayList<>();
+        ResumeMirrorTopicsResponseData.TopicResultCollection topicResList = new ResumeMirrorTopicsResponseData.TopicResultCollection();
         for (String topic : topics) {
             ResumeMirrorTopicsResponseData.TopicResult topicRes = new ResumeMirrorTopicsResponseData.TopicResult();
             Uuid topicId = replicationControl.getTopicId(topic);
@@ -568,7 +568,7 @@ public class ConfigurationControlManager {
         List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         RecoverMirrorTopicsResponseData data = new RecoverMirrorTopicsResponseData();
 
-        List<RecoverMirrorTopicsResponseData.TopicResult> topicResList = new ArrayList<>();
+        RecoverMirrorTopicsResponseData.TopicResultCollection topicResList = new RecoverMirrorTopicsResponseData.TopicResultCollection();
         for (String topic : topics) {
             RecoverMirrorTopicsResponseData.TopicResult topicRes = new RecoverMirrorTopicsResponseData.TopicResult();
             topicRes.setTopicName(topic);
