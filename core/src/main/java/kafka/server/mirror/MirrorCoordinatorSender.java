@@ -296,7 +296,15 @@ class MirrorCoordinatorSender {
                                 }));
 
                             synchronized (merged) {
-                                readMirrorStatesResponse.data().topics().forEach(t -> merged.topics().add(t.duplicate()));
+                                // A topic's partitions may span multiple coordinators, so merge rather than replace.
+                                for (var t : readMirrorStatesResponse.data().topics()) {
+                                    var existing = merged.topics().find(t.topicName());
+                                    if (existing == null) {
+                                        merged.topics().add(t.duplicate());
+                                    } else {
+                                        t.partitions().forEach(p -> existing.partitions().add(p.duplicate()));
+                                    }
+                                }
                                 if (readMirrorStatesResponse.data().errorCode() != Errors.NONE.code()) {
                                     log.error("Failed to read states from remote coordinator: {}-{}",
                                             readMirrorStatesResponse.data().errorCode(), readMirrorStatesResponse.data().errorMessage());
