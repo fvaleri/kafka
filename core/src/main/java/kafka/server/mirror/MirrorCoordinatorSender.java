@@ -376,7 +376,15 @@ class MirrorCoordinatorSender {
                             log.debug("Read offsets from remote leader node {} completed. {}", node, response.responseBody());
 
                             synchronized (merged) {
-                                readOffsetsResponse.data().topics().forEach(t -> merged.topics().add(t.duplicate()));
+                                // A topic's partitions may span multiple nodes, so merge rather than replace.
+                                for (var t : readOffsetsResponse.data().topics()) {
+                                    var existing = merged.topics().find(t.topicName());
+                                    if (existing == null) {
+                                        merged.topics().add(t.duplicate());
+                                    } else {
+                                        t.partitions().forEach(p -> existing.partitions().add(p.duplicate()));
+                                    }
+                                }
                                 if (readOffsetsResponse.data().errorCode() != Errors.NONE.code()) {
                                     log.error("Failed to read offsets from remote leader node {}. {}: {}",
                                             node, readOffsetsResponse.data().errorCode(), readOffsetsResponse.data().errorMessage());
@@ -481,7 +489,15 @@ class MirrorCoordinatorSender {
                     log.debug("Write states to remote coordinator completed: {}", response.responseBody());
                     if (response.responseBody() instanceof WriteMirrorStatesResponse writeMirrorStatesResponse) {
                         synchronized (merged) {
-                            writeMirrorStatesResponse.data().topics().forEach(t -> merged.topics().add(t.duplicate()));
+                            // A topic's partitions may span multiple coordinators, so merge rather than replace.
+                            for (var t : writeMirrorStatesResponse.data().topics()) {
+                                var existing = merged.topics().find(t.topicName());
+                                if (existing == null) {
+                                    merged.topics().add(t.duplicate());
+                                } else {
+                                    t.partitions().forEach(p -> existing.partitions().add(p.duplicate()));
+                                }
+                            }
                             if (writeMirrorStatesResponse.data().errorCode() != Errors.NONE.code()) {
                                 log.error("Failed to write states to remote coordinator: {}-{}",
                                         writeMirrorStatesResponse.data().errorCode(), writeMirrorStatesResponse.data().errorMessage());
