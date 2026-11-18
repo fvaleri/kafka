@@ -295,7 +295,7 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
     @Override
     public int partitionFor(MirrorPartition key) {
         throwIfNotActive();
-        return key.coordinatorPartition(mirrorConfig.stateTopicNumPartitions());
+        return key.coordinatingPartition(mirrorConfig.stateTopicNumPartitions());
     }
 
     @Override
@@ -320,7 +320,7 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
         // Each partition maps to a coordinator shard based on mirror name, topic id, and partition.
         Map<Integer, Map<String, Set<Integer>>> byCoordPartition = new HashMap<>();
         partitions.forEach((topic, parts) -> parts.forEach(part -> {
-            int cp = partitionFor(MirrorPartition.of(mirrorName, metadataCache.getTopicId(topic), part));
+            int cp = partitionFor(new MirrorPartition(mirrorName, metadataCache.getTopicId(topic), part));
             byCoordPartition.computeIfAbsent(cp, k -> new HashMap<>())
                 .computeIfAbsent(topic, k -> new HashSet<>()).add(part);
         }));
@@ -401,7 +401,7 @@ public class ClusterMirrorCoordinatorService implements ClusterMirrorCoordinator
             Set<Integer> partitionIndices = new HashSet<>();
             partitions.forEach(partition -> {
                 partitionIndices.add(partition.partition());
-                int cp = partitionFor(MirrorPartition.of(
+                int cp = partitionFor(new MirrorPartition(
                     mirrorName, metadataCache.getTopicId(topic), partition.partition()));
                 byCoordPartition.computeIfAbsent(cp, k -> new HashMap<>())
                     .computeIfAbsent(topic, k -> new HashSet<>()).add(partition);

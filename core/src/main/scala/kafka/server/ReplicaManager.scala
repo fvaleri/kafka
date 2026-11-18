@@ -1823,7 +1823,7 @@ class ReplicaManager(val config: KafkaConfig,
           val mirrorName = partition.getMirrorName()
           val state = if (mirrorCache.isDefined && mirrorName.isPresent) {
             val entry = mirrorCache.get.getPartitionMetadata(
-              org.apache.kafka.server.mirror.MirrorPartition.of(
+              new org.apache.kafka.server.mirror.MirrorPartition(
                 mirrorName.get(),
                 mirrorCache.get.getTopicId(partition.topicPartition.topic()),
                 partition.topicPartition.partition()))
@@ -2684,7 +2684,7 @@ class ReplicaManager(val config: KafkaConfig,
     val mirrorName = partition.getMirrorName()
     if (mirrorCache.isDefined && mirrorName.isPresent) {
       val entry = mirrorCache.get.getPartitionMetadata(
-        org.apache.kafka.server.mirror.MirrorPartition.of(
+        new org.apache.kafka.server.mirror.MirrorPartition(
           mirrorName.get(),
           metadataCache.getTopicId(partition.topicPartition.topic()),
           partition.topicPartition.partition()))

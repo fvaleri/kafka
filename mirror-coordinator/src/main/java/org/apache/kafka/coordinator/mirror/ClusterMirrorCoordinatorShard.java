@@ -207,7 +207,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
     }
 
     private void replayPartitionState(MirrorPartitionStateKey key, ApiMessageAndVersion value) {
-        MirrorPartition mp = MirrorPartition.of(key.mirrorName(), key.topicId(), key.partition());
+        MirrorPartition mp = new MirrorPartition(key.mirrorName(), key.topicId(), key.partition());
         if (value != null) {
             MirrorPartitionStateValue stateValue = (MirrorPartitionStateValue) value.message();
             MirrorPartitionState state = MirrorPartitionState.fromValue(stateValue.state());
@@ -246,7 +246,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
     }
 
     private void replayLastMirrorEpoch(LastMirrorEpochsKey key, ApiMessageAndVersion value) {
-        MirrorPartition mp = MirrorPartition.of(key.mirrorName(), key.topicId(), key.partition());
+        MirrorPartition mp = new MirrorPartition(key.mirrorName(), key.topicId(), key.partition());
         if (value != null) {
             LastMirrorEpochsValue lme = (LastMirrorEpochsValue) value.message();
             maybeUpdateLeaderEpochMap(mp, lme.leaderEpoch());
@@ -293,7 +293,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
         partitions.forEach((topic, parts) -> {
             List<ReadMirrorStatesResponseData.PartitionResult> partitionResults = new ArrayList<>();
             parts.forEach(part -> {
-                MirrorPartition mp = MirrorPartition.of(mirrorName, metadataCache.getTopicId(topic), part);
+                MirrorPartition mp = new MirrorPartition(mirrorName, metadataCache.getTopicId(topic), part);
                 // Read at committed offset to ensure only committed state is returned
                 MirrorPartitionMetadata mpm = MirrorPartitionMetadata.orEmpty(
                         partitionMetadata.get(mp, committedOffset));
@@ -388,7 +388,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
             int stateEpoch, String errorMessage, short retryAttempt, boolean nonRetryable,
             Map<MirrorPartition, PendingPartitionState> pendingStates
     ) {
-        MirrorPartition mp = MirrorPartition.of(mirrorName, metadataCache.getTopicId(tp.topic()), tp.partition());
+        MirrorPartition mp = new MirrorPartition(mirrorName, metadataCache.getTopicId(tp.topic()), tp.partition());
         PendingPartitionState current = pendingStates.get(mp);
         if (current == null) {
             current = new PendingPartitionState(
@@ -447,7 +447,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
             int leaderEpoch, int stateEpoch, Map<MirrorPartition,
             PendingPartitionState> pendingStates
     ) {
-        MirrorPartition mp = MirrorPartition.of(
+        MirrorPartition mp = new MirrorPartition(
                 mirrorName, metadataCache.getTopicId(tp.topic()), tp.partition());
         boolean alreadyValidated = pendingStates.containsKey(mp);
         PendingPartitionState current = pendingStates.get(mp);
