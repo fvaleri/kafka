@@ -149,7 +149,11 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
               val clusterConfigProps = configRepository.config(new ConfigResource(ConfigResource.Type.CLUSTER_MIRROR, resource.resourceName))
               val configEntries = new util.ArrayList[DescribeConfigsResponseData.DescribeConfigsResourceResult]()
               clusterConfigProps.entrySet().forEach(entry =>
-                configEntries.add(new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(entry.getKey.toString).setValue(entry.getValue.toString).setConfigType(DescribeConfigsResponse.ConfigType.STRING.id()).setConfigSource(ConfigSource.DYNAMIC_BROKER_CONFIG.id))
+                configEntries.add(new DescribeConfigsResponseData.DescribeConfigsResourceResult()
+                  .setName(entry.getKey.toString)
+                  .setValue(entry.getValue.toString)
+                  .setConfigType(DescribeConfigsResponse.ConfigType.STRING.id())
+                  .setConfigSource(ConfigSource.CLUSTER_MIRROR_CONFIG.id))
               )
               // createBrokerConfigEntry(perBrokerConfig = true, includeSynonyms, includeDocumentation)(_, _))
               new DescribeConfigsResponseData.DescribeConfigsResult()
