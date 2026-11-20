@@ -49,7 +49,8 @@ import org.apache.kafka.metadata.publisher.AclPublisher
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, TopicIdPartition}
-import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
+import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.server.config.DelegationTokenManagerConfigs
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
@@ -114,7 +115,7 @@ class BrokerServer(
 
   var tokenManager: DelegationTokenManager = _
 
-  var dynamicConfigHandlers: Map[ConfigType, ConfigHandler] = _
+  var dynamicConfigHandlers: Map[ConfigResource.Type, ConfigHandler] = _
 
   @volatile private[this] var _replicaManager: ReplicaManager = _
 
@@ -412,11 +413,11 @@ class BrokerServer(
         config, clientToControllerChannelManager, groupCoordinator,
         transactionCoordinator, shareCoordinator, mirrorCoordinator)
 
-      dynamicConfigHandlers = Map[ConfigType, ConfigHandler](
-        ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers),
-        ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers),
-        ConfigType.CLIENT_METRICS -> new ClientMetricsConfigHandler(clientMetricsManager),
-        ConfigType.GROUP -> new GroupConfigHandler(groupCoordinator))
+      dynamicConfigHandlers = Map[ConfigResource.Type, ConfigHandler](
+        ConfigResource.Type.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers),
+        ConfigResource.Type.BROKER -> new BrokerConfigHandler(config, quotaManagers),
+        ConfigResource.Type.CLIENT_METRICS -> new ClientMetricsConfigHandler(clientMetricsManager),
+        ConfigResource.Type.GROUP -> new GroupConfigHandler(groupCoordinator))
 
       val featuresRemapped = BrokerFeatures.createDefaultFeatureMap(brokerFeatures)
 

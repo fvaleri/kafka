@@ -30,7 +30,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.coordinator.group.GroupConfig
-import org.apache.kafka.server.config.{ConfigType, QuotaConfig}
+import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -43,7 +43,7 @@ import scala.collection._
 import scala.jdk.CollectionConverters._
 
 /**
- * This script can be used to change configs for topics/clients/users/brokers/ips/client-metrics/groups dynamically
+ * This script can be used to change configs for topics/clients/users/brokers/ips/client-metrics/groups/cluster-mirrors dynamically
  * An entity described or altered by the command may be one of:
  * <ul>
  *     <li> topic: --topic <topic> OR --entity-type topics --entity-name <topic>
@@ -56,6 +56,7 @@ import scala.jdk.CollectionConverters._
  *     <li> ip: --ip <ip> OR --entity-type ips --entity-name <ip>
  *     <li> client-metrics: --client-metrics <name> OR --entity-type client-metrics --entity-name <name>
  *     <li> group: --group <group> OR --entity-type groups --entity-name <group>
+ *     <li> cluster-mirror: --cluster-mirror <name> OR --entity-type cluster-mirrors --entity-name <name>
  * </ul>
  * --entity-type <users|clients|brokers|ips> --entity-default may be specified in place of --entity-type <users|clients|brokers|ips> --entity-name <entityName>
  * when describing or altering default configuration for users, clients, brokers, or ips, respectively.
@@ -66,23 +67,24 @@ object ConfigCommand extends Logging {
 
   private val BrokerDefaultEntityName = ""
   val BrokerLoggerConfigType = "broker-loggers"
-  private val BrokerSupportedConfigTypes = ConfigType.values.map(_.value) :+ BrokerLoggerConfigType
   private val DefaultScramIterations = 4096
-  private val TopicType = ConfigType.TOPIC.value
-  private val ClientMetricsType = ConfigType.CLIENT_METRICS.value
-  private val BrokerType = ConfigType.BROKER.value
-  private val GroupType = ConfigType.GROUP.value
-  private val UserType = ConfigType.USER.value
-  private val ClientType = ConfigType.CLIENT.value
-  private val IpType = ConfigType.IP.value
-  private val ClusterMirrorType = ConfigType.CLUSTER_MIRROR.value
+  private val TopicType = "topics"
+  private val ClientMetricsType = "client-metrics"
+  private val BrokerType = "brokers"
+  private val GroupType = "groups"
+  private val UserType = "users"
+  private val ClientType = "clients"
+  private val IpType = "ips"
+  private val ClusterMirrorType = "cluster-mirrors"
+  private val BrokerSupportedConfigTypes = Seq(TopicType, ClientType, UserType, BrokerType,
+    IpType, ClientMetricsType, GroupType, ClusterMirrorType, BrokerLoggerConfigType)
 
   def main(args: Array[String]): Unit = {
     try {
       val opts = new ConfigCommandOptions(args)
 
       CommandLineUtils.maybePrintHelpOrVersion(opts,
-        "This tool helps to manipulate and describe entity config for a topic, client, user, broker, ip, client-metrics or group")
+        "This tool helps to manipulate and describe entity config for a topic, client, user, broker, ip, client-metrics, group or cluster-mirror")
 
       opts.checkArgs()
       processCommand(opts)
@@ -230,7 +232,7 @@ object ConfigCommand extends Logging {
             throw new IllegalArgumentException(s"Only quota configs can be added for '$ClientType' using --bootstrap-server. Unexpected config names: ${unknownConfigsToAdd ++ scramConfigsToAddMap.keys}")
           if (unknownConfigsToDelete.nonEmpty || scramConfigsToDelete.nonEmpty)
             throw new IllegalArgumentException(s"Only quota configs can be deleted for '$ClientType' using --bootstrap-server. Unexpected config names: ${unknownConfigsToDelete ++ scramConfigsToDelete}")
-        } else { // ConfigType.User
+        } else { // User
           if (unknownConfigsToAdd.nonEmpty)
             throw new IllegalArgumentException(s"Only quota and SCRAM credential configs can be added for '$UserType' using --bootstrap-server. Unexpected config names: $unknownConfigsToAdd")
           if (unknownConfigsToDelete.nonEmpty)
@@ -376,7 +378,11 @@ object ConfigCommand extends Logging {
               return
             }
           case ClusterMirrorType =>
-
+            if (adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.CLUSTER_MIRROR), new ListConfigResourcesOptions).all.get
+              .stream.noneMatch(_.name == name)) {
+              System.out.println(s"The ${entityType.dropRight(1)} '$name' doesn't exist and doesn't have dynamic config.")
+              return
+            }
           case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
         }
       }
@@ -394,7 +400,6 @@ object ConfigCommand extends Logging {
         case GroupType =>
           adminClient.listGroups().all.get.asScala.map(_.groupId).toSet ++
             adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.GROUP), new ListConfigResourcesOptions).all().get().asScala.map(_.name).toSet
-
         case ClusterMirrorType =>
             adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.CLUSTER_MIRROR), new ListConfigResourcesOptions).all().get().asScala.map(_.name).toSet
         case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
@@ -459,7 +464,7 @@ object ConfigCommand extends Logging {
       case GroupType =>
         (ConfigResource.Type.GROUP, Some(ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG))
       case ClusterMirrorType =>
-        (ConfigResource.Type.CLUSTER_MIRROR, Some(ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG))
+        (ConfigResource.Type.CLUSTER_MIRROR, Some(ConfigEntry.ConfigSource.DYNAMIC_CLUSTER_MIRROR_CONFIG))
       case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
     }
 
@@ -565,10 +570,10 @@ object ConfigCommand extends Logging {
     val describeOpt: OptionSpecBuilder = parser.accepts("describe", "List configs for the given entity.")
     val allOpt: OptionSpecBuilder = parser.accepts("all", "List all configs for the given entity, including static configs if available.")
 
-    val entityType: OptionSpec[String] = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers/ips/client-metrics/groups)")
+    val entityType: OptionSpec[String] = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers/ips/client-metrics/groups/cluster-mirrors)")
       .withRequiredArg
       .ofType(classOf[String])
-    val entityName: OptionSpec[String] = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id/ip/client metrics/group id)")
+    val entityName: OptionSpec[String] = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id/ip/client metrics/group id/cluster mirror name)")
       .withRequiredArg
       .ofType(classOf[String])
     private val entityDefault: OptionSpecBuilder = parser.accepts("entity-default", "Default entity name for clients/users/brokers/ips (applies to corresponding entity type)")
@@ -620,6 +625,9 @@ object ConfigCommand extends Logging {
     val clientMetrics: OptionSpec[String] = parser.accepts("client-metrics", "The client metrics config resource name.")
       .withRequiredArg
       .ofType(classOf[String])
+    val clusterMirror: OptionSpec[String] = parser.accepts("cluster-mirror", "The cluster mirror's name.")
+      .withRequiredArg
+      .ofType(classOf[String])
     options = parser.parse(args : _*)
 
     private val entityFlags = List((topic, TopicType),
@@ -629,7 +637,8 @@ object ConfigCommand extends Logging {
       (brokerLogger, BrokerLoggerConfigType),
       (ip, IpType),
       (clientMetrics, ClientMetricsType),
-      (group, GroupType))
+      (group, GroupType),
+      (clusterMirror, ClusterMirrorType))
 
     private val entityDefaultsFlags = List((clientDefaults, ClientType),
       (userDefaults, UserType),
