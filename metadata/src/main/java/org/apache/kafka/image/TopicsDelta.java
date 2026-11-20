@@ -102,13 +102,17 @@ public final class TopicsDelta {
         Uuid topicId = createdTopics.get(record.topicName());
         if (topicId == null) {
             TopicImage topicImage = image.getTopic(record.topicName());
-            if (topicImage != null) {
+            // Ignore the image's topic if it was deleted in this delta, otherwise we would resurrect it.
+            if (topicImage != null && !deletedTopicIds.contains(topicImage.id())) {
                 topicId = topicImage.id();
             }
         }
         if (topicId != null) {
             TopicDelta topicDelta = getOrCreateTopicDelta(topicId);
             topicDelta.replay(record);
+        } else {
+            throw new RuntimeException("Unable to process mirror topic state change for mirror " + record.mirrorName()
+                    + " with topic name " + record.topicName() + ": no such topic found.");
         }
     }
 
@@ -153,6 +157,7 @@ public final class TopicsDelta {
         String topicName;
         if (topicDelta != null) {
             topicName = topicDelta.image().name();
+            createdTopics.remove(topicName);
             if (image.topicsById().containsKey(record.topicId())) {
                 deletedTopicIds.add(record.topicId());
             }
@@ -241,6 +246,7 @@ public final class TopicsDelta {
      *   <li>followers: partitions for which the broker is now a follower or follower with isr or replica updates (partition epoch bump on follower)</li>
      *   <li>topicIds: a map of topic names to topic IDs in leaders and followers changes</li>
      *   <li>directoryIds: partitions for which directory id changes or newly added to the broker</li>
+     *   <li>mirrorTopicStates: topics for which the mirror name or desired mirror state changed</li>
      * </ul>
      * <p>
      * Leader epoch bumps are a strict subset of all partition epoch bumps, so all partitions in electedLeaders will be in leaders.
