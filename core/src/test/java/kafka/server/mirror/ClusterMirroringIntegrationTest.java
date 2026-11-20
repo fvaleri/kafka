@@ -16,7 +16,9 @@
  */
 package kafka.server.mirror;
 
+import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
+import kafka.server.metadata.KRaftMetadataCache;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -65,6 +67,7 @@ import org.apache.kafka.coordinator.mirror.ClusterMirrorConfig;
 import org.apache.kafka.coordinator.mirror.MirrorCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.mirror.generated.LastMirrorEpochsKey;
 import org.apache.kafka.coordinator.mirror.generated.MirrorPartitionStateKey;
+import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
@@ -634,6 +637,64 @@ public class ClusterMirroringIntegrationTest {
                     && recs.get(0).key().apiKey() == new MirrorPartitionStateKey().apiKey() && recs.get(0).value() == null
                     && recs.get(1).key().apiKey() == new LastMirrorEpochsKey().apiKey() && recs.get(1).value() == null;
         }, DEFAULT_MAX_WAIT_MS, "Tombstone records not found in last batch of " + mirrorStateTp);
+    }
+
+    @Test
+    void testDeleteClusterMirrorDisassociationSurvivesControllerRestart() throws Exception {
+        String topic = "disassociate-topic";
+        String mirror = "my-mirror";
+
+        // Rebuild the destination cluster so that every metadata batch triggers a snapshot
+        closeQuietly(dstAdmin);
+        closeQuietly(dstCluster);
+        dstCluster = buildCluster(2, Map.of(
+                MetadataLogConfig.METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_CONFIG, "10"));
+        dstAdmin = Admin.create(Map.of(
+                AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, dstCluster.bootstrapServers()
+        ));
+
+        srcAdmin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).all().get(10, TimeUnit.SECONDS);
+        produceRecords(srcCluster, topic, 0, 10);
+
+        dstAdmin.createClusterMirror(mirror, Map.of(
+                ClusterMirrorConfig.BOOTSTRAP_SERVERS_CONFIG, srcBootstrapServer
+        ), new CreateClusterMirrorOptions()).all().get(10, TimeUnit.SECONDS);
+        waitForMirrorLagZero(dstAdmin, mirror, topic);
+
+        dstAdmin.stopMirrorTopics(mirror, List.of(topic), new StopMirrorTopicsOptions())
+                .all().get(10, TimeUnit.SECONDS);
+        waitForMirrorState(dstAdmin, mirror, STOPPED, topic);
+
+        dstAdmin.deleteClusterMirror(mirror, new DeleteClusterMirrorOptions())
+                .all().get(10, TimeUnit.SECONDS);
+        waitForListMirrorEmpty(mirror);
+
+        // The controller replayed the disassociation record, so the topic is a normal topic
+        dstAdmin.createPartitions(Map.of(topic, NewPartitions.increaseTo(2)))
+                .all().get(10, TimeUnit.SECONDS);
+        waitForCondition(() -> describeTopics(dstAdmin, List.of(topic)).get(topic).partitions().size() == 2,
+                "Partition count of " + topic + " not increased to 2");
+
+        // Wait for the controller to snapshot past the disassociation
+        long lastOffset = ((KRaftMetadataCache) dstCluster.brokers().get(0).metadataCache())
+                .currentImage().provenance().lastContainedOffset();
+        ControllerServer controller = dstCluster.controllers().values().iterator().next();
+        waitForCondition(() -> controller.sharedServer().raftManager().replicatedLog().latestSnapshotId()
+                        .map(snapshotId -> snapshotId.offset() > lastOffset).orElse(false),
+                DEFAULT_MAX_WAIT_MS, "Controller snapshot past offset " + lastOffset + " not generated");
+
+        // Restart the controller so that it rebuilds its state from the snapshot
+        controller.shutdown();
+        controller.startup();
+        // Only 1 controller so this is fine
+        waitForCondition(() -> controller.controller().isActive(), "Controller not active after restart");
+
+        // The topic must still be a normal topic. If the snapshot re-associated it with the deleted
+        // mirror, the controller rejects this with InvalidMirrorStateException.
+        dstAdmin.createPartitions(Map.of(topic, NewPartitions.increaseTo(3)))
+                .all().get(30, TimeUnit.SECONDS);
+        waitForCondition(() -> describeTopics(dstAdmin, List.of(topic)).get(topic).partitions().size() == 3,
+                "Partition count of " + topic + " not increased to 3");
     }
 
     @Test

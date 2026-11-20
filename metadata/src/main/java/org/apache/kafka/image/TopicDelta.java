@@ -25,7 +25,6 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
-import org.apache.kafka.server.mirror.MirrorPartitionState;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -43,8 +42,10 @@ public final class TopicDelta {
     private final Map<Integer, PartitionRegistration> partitionChanges = new HashMap<>();
     private final Map<Integer, Integer> partitionToUncleanLeaderElectionCount = new HashMap<>();
     private final Map<Integer, Integer> partitionToElrElectionCount = new HashMap<>();
-    private Byte desiredMirrorState;
+
+    private boolean mirrorRecordReplayed;
     private String mirrorName;
+    private byte desiredMirrorState;
 
     public TopicDelta(TopicImage image) {
         this.image = image;
@@ -110,6 +111,7 @@ public final class TopicDelta {
     public void replay(MirrorTopicStateChangeRecord record) {
         mirrorName = record.mirrorName();
         desiredMirrorState = record.desiredState();
+        mirrorRecordReplayed = true;
     }
 
     private void updateElectionStats(int partitionId, PartitionRegistration prevPartition, int newLeader, byte newLeaderRecoveryState) {
@@ -161,8 +163,8 @@ public final class TopicDelta {
             }
         }
 
-        byte newMirrorState = desiredMirrorState == null ? image.desiredMirrorState() : desiredMirrorState;
-        String newMirrorName =  mirrorName == null ? image.mirrorName() : mirrorName;
+        byte newMirrorState = mirrorRecordReplayed ? desiredMirrorState : image.desiredMirrorState();
+        String newMirrorName =  mirrorRecordReplayed ? mirrorName : image.mirrorName();
 
         return new TopicImage(
                 image.name(),
@@ -201,11 +203,7 @@ public final class TopicDelta {
         Map<TopicIdPartition, Uuid> directoryIds = new HashMap<>();
         Map<Uuid, LocalReplicaChanges.MirrorTopicState> mirrorTopicChanges = new HashMap<>();
 
-        boolean mirrorNameChanged = mirrorName != null
-                && !mirrorName.equals(image.mirrorName());
-        boolean mirrorRecordReplayed = desiredMirrorState != null
-                && desiredMirrorState != MirrorPartitionState.UNKNOWN.value();
-        if (mirrorNameChanged || mirrorRecordReplayed) {
+        if (mirrorRecordReplayed) {
             mirrorTopicChanges.put(image.id(), new LocalReplicaChanges.MirrorTopicState(mirrorName, desiredMirrorState));
         }
 
