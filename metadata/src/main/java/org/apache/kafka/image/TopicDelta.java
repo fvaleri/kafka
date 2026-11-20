@@ -260,6 +260,8 @@ public final class TopicDelta {
     public String toString() {
         return "TopicDelta(" +
             "partitionChanges=" + partitionChanges +
+            ", mirrorName=" + mirrorName +
+            ", desiredMirrorState=" + desiredMirrorState +
             ')';
     }
 }
