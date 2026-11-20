@@ -18,8 +18,6 @@
 package kafka.server
 
 import kafka.network.RequestChannel
-
-import java.util.{Collections, Properties}
 import kafka.utils.Logging
 import org.apache.kafka.common.acl.AclOperation.DESCRIBE_CONFIGS
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
@@ -28,11 +26,12 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource
 import org.apache.kafka.common.message.DescribeConfigsResponseData
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{ApiError, DescribeConfigsRequest, DescribeConfigsResponse}
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
+import org.apache.kafka.common.requests.{ApiError, DescribeConfigsRequest, DescribeConfigsResponse}
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, CLUSTER_MIRROR, GROUP, TOPIC}
 import org.apache.kafka.coordinator.group.GroupConfig
+import org.apache.kafka.coordinator.mirror.ClusterMirrorConfig
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
 import org.apache.kafka.server.ConfigHelperUtils.createResponseConfig
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
@@ -40,7 +39,7 @@ import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 
-import java.util
+import java.util.{Collections, Properties}
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOptional
@@ -142,23 +141,13 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             }
 
           case ConfigResource.Type.CLUSTER_MIRROR =>
-            val cluster = resource.resourceName
-            if (cluster == null || cluster.isEmpty) {
-              throw new InvalidRequestException("Cluster name must not be empty")
+            val mirrorName = resource.resourceName
+            if (mirrorName == null || mirrorName.isEmpty) {
+              throw new InvalidRequestException("Cluster mirror name must not be empty")
             } else {
-              val clusterConfigProps = configRepository.config(new ConfigResource(ConfigResource.Type.CLUSTER_MIRROR, resource.resourceName))
-              val configEntries = new util.ArrayList[DescribeConfigsResponseData.DescribeConfigsResourceResult]()
-              clusterConfigProps.entrySet().forEach(entry =>
-                configEntries.add(new DescribeConfigsResponseData.DescribeConfigsResourceResult()
-                  .setName(entry.getKey.toString)
-                  .setValue(entry.getValue.toString)
-                  .setConfigType(DescribeConfigsResponse.ConfigType.STRING.id())
-                  .setConfigSource(ConfigSource.CLUSTER_MIRROR_CONFIG.id))
-              )
-              // createBrokerConfigEntry(perBrokerConfig = true, includeSynonyms, includeDocumentation)(_, _))
-              new DescribeConfigsResponseData.DescribeConfigsResult()
-                .setErrorCode(Errors.NONE.code())
-                .setConfigs(configEntries)
+              val mirrorProps = configRepository.config(new ConfigResource(ConfigResource.Type.CLUSTER_MIRROR, mirrorName))
+              val mirrorConfig = ClusterMirrorConfig.fromProperties(mirrorProps)
+              createResponseConfig(resource, mirrorConfig, createClusterMirrorConfigEntry(mirrorConfig, mirrorProps, includeSynonyms, includeDocumentation)(_, _))
             }
 
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
@@ -227,6 +216,33 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     new DescribeConfigsResponseData.DescribeConfigsResourceResult()
       .setName(name).setValue(valueAsString).setConfigSource(source)
       .setIsSensitive(false).setReadOnly(false).setSynonyms(synonyms.asJava)
+      .setDocumentation(configDocumentation).setConfigType(dataType.id)
+  }
+
+  /**
+   * Creates a DescribeConfigsResourceResult for a cluster mirror config entry, resolving config
+   * type, sensitivity, synonyms, and documentation from the ClusterMirrorConfig definition.
+   */
+  private def createClusterMirrorConfigEntry(mirrorConfig: ClusterMirrorConfig, mirrorProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
+                                            (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
+    val configEntryType = ClusterMirrorConfig.configType(name).toScala
+    val isSensitive = configEntryType.exists(_.isSensitive)
+    val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType.orNull)
+    val allSynonyms = {
+      if (!mirrorProps.containsKey(name)) {
+        List.empty
+      } else {
+        List(new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name).setValue(valueAsString)
+          .setSource(ConfigSource.CLUSTER_MIRROR_CONFIG.id))
+      }
+    }
+    val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG.id else allSynonyms.head.source
+    val synonyms = if (!includeSynonyms) List.empty else allSynonyms
+    val dataType = configResponseType(configEntryType)
+    val configDocumentation = if (includeDocumentation) mirrorConfig.documentationOf(name) else null
+    new DescribeConfigsResponseData.DescribeConfigsResourceResult()
+      .setName(name).setValue(valueAsString).setConfigSource(source)
+      .setIsSensitive(isSensitive).setReadOnly(false).setSynonyms(synonyms.asJava)
       .setDocumentation(configDocumentation).setConfigType(dataType.id)
   }
 
