@@ -32,6 +32,7 @@ import com.google.re2j.Pattern;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Properties;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
@@ -447,6 +448,13 @@ public final class ClusterMirrorConfig extends AbstractConfig {
      */
     public static ConfigDef configDef() {
         return new ConfigDef(CONFIG_DEF);
+    }
+
+    /**
+     * Returns the {@link ConfigDef.Type} for the given cluster mirror config name, if defined.
+     */
+    public static Optional<ConfigDef.Type> configType(String configName) {
+        return Optional.ofNullable(CONFIG_DEF.configKeys().get(configName)).map(c -> c.type);
     }
 
     /**
