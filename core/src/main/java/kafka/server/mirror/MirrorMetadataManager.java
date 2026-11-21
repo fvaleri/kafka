@@ -30,7 +30,7 @@ import org.apache.kafka.clients.admin.DescribeClusterMirrorsOptions;
 import org.apache.kafka.clients.admin.DescribeClusterMirrorsResult;
 import org.apache.kafka.clients.admin.ListClusterMirrorsOptions;
 import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.common.EpochOffset;
+import org.apache.kafka.common.LastMirror;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
@@ -882,7 +882,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                                             log.warn("The source cluster doesn't support DescribeClusterMirror API. " +
                                                     "Replication will be one-way without failback.");
                                             replicaManagerSupplier.get().truncateForMirrorAlignment(
-                                                    Map.of(topicPartition, new EpochOffset(-1, -1)), callback);
+                                                    Map.of(topicPartition, new LastMirror(-1, -1)), callback);
                                         } else {
                                             log.warn("Failed to truncate {} to last known position", topicPartition, error);
                                             transitionTo(mirrorName, Set.of(topicPartition), MirrorPartitionState.FAILED,
@@ -892,7 +892,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                                     }
                                     if (!offsetEpochs.containsKey(topicPartition)) {
                                         log.info("No epoch returned for {}, mirroring from scratch", topicPartition);
-                                        offsetEpochs.put(topicPartition, new EpochOffset(-1, -1));
+                                        offsetEpochs.put(topicPartition, new LastMirror(-1, -1));
                                     }
                                     replicaManagerSupplier.get().truncateForMirrorAlignment(
                                             offsetEpochs, callback);
@@ -940,7 +940,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
         var logOpt = rm.getPartitionOrException(tp).log();
         int latestEpoch = logOpt.isDefined() ? logOpt.get().latestEpoch().orElse(-1) : -1;
         long latestOffset = logOpt.isDefined() ? logOpt.get().logEndOffset() : -1L;
-        EpochOffset lastMirrorEpoch = new EpochOffset(latestEpoch, latestOffset);
+        LastMirror lastMirrorEpoch = new LastMirror(latestEpoch, latestOffset);
 
         MirrorPartition mp = new MirrorPartition(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
         MirrorPartitionMetadata existing = mirrorCache.getPartitionMetadata(mp);
@@ -1107,7 +1107,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
      * Sends a last mirror epoch (LME) lookup request to the source cluster.
      * The log output is used by test_failover_failback test to verify failback behavior.
      */
-    public CompletionStage<Map<TopicPartition, EpochOffset>> sendLastMirrorEpochLookup(
+    public CompletionStage<Map<TopicPartition, LastMirror>> sendLastMirrorEpochLookup(
             String mirrorName, TopicPartition tp, Collection<ClusterMirrorListing> sourceMirrors) {
         Admin admin = sourceSyncer.getOrCreateSourceAdmin(mirrorName);
         log.info("Sending LME lookup request for partition {} in mirror {}", tp, mirrorName);
@@ -1581,7 +1581,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                     new MirrorPartitionMetadata.Builder()
                             .withState(MirrorPartitionState.fromValue(partition.state()))
                             .withStateEpoch(partition.stateEpoch())
-                            .withLastMirrorEpoch(new EpochOffset(partition.lastMirrorEpoch(), partition.lastMirrorOffset()))
+                            .withLastMirrorEpoch(new LastMirror(partition.lastMirrorEpoch(), partition.lastMirrorOffset()))
                             .withErrorMessage(partition.errorMessage())
                             .withRetryAttempt(partition.retryAttempt())
                             .withPrevState(MirrorPartitionState.fromValue(partition.previousState()))

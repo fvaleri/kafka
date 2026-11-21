@@ -16,7 +16,7 @@
  */
 package kafka.server.mirror;
 
-import org.apache.kafka.common.EpochOffset;
+import org.apache.kafka.common.LastMirror;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -138,7 +138,7 @@ public class MirrorLeaderCache {
      * Each LME write bumps the coordinator stateEpoch, so a higher stateEpoch always
      * carries a newer position and stale completions are rejected.
      */
-    public void updateLastMirrorEpoch(MirrorPartition mp, int stateEpoch, EpochOffset position) {
+    public void updateLastMirrorEpoch(MirrorPartition mp, int stateEpoch, LastMirror position) {
         mirrorPartitions.computeIfPresent(mp, (key, existing) -> {
             if (existing.stateEpoch() > stateEpoch) {
                 LOG.debug("Skipping stale LastMirrorEpoch update for {}: existing stateEpoch {} > incoming {}",

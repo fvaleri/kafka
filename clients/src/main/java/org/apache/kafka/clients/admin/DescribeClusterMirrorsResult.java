@@ -17,8 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.EpochOffset;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.LastMirror;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
@@ -31,14 +31,14 @@ import java.util.Map;
 @InterfaceStability.Evolving
 public class DescribeClusterMirrorsResult {
     private final KafkaFuture<Map<String, ClusterMirrorDescription>> future;
-    private final KafkaFuture<Map<TopicPartition, EpochOffset>> lastMirrorFuture;
+    private final KafkaFuture<Map<TopicPartition, LastMirror>> lastMirrorFuture;
 
     DescribeClusterMirrorsResult(KafkaFuture<Map<String, ClusterMirrorDescription>> future) {
         this(future, KafkaFuture.completedFuture(Collections.emptyMap()));
     }
 
     DescribeClusterMirrorsResult(KafkaFuture<Map<String, ClusterMirrorDescription>> future,
-                                 KafkaFuture<Map<TopicPartition, EpochOffset>> lastMirrorFuture) {
+                                 KafkaFuture<Map<TopicPartition, LastMirror>> lastMirrorFuture) {
         this.future = future;
         this.lastMirrorFuture = lastMirrorFuture;
     }
@@ -52,9 +52,9 @@ public class DescribeClusterMirrorsResult {
 
     /**
      * Return a future containing last mirror epoch and offset lookup results.
-     * Keyed by {@link TopicPartition} to {@link EpochOffset}.
+     * Keyed by {@link TopicPartition} to {@link LastMirror}.
      */
-    public KafkaFuture<Map<TopicPartition, EpochOffset>> lastMirrorEpochs() {
+    public KafkaFuture<Map<TopicPartition, LastMirror>> lastMirrorEpochs() {
         return lastMirrorFuture;
     }
 }

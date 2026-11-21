@@ -2700,7 +2700,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  def truncateForMirrorAlignment(epochsOffset: util.Map[TopicPartition, EpochOffset], callback: Consumer[TopicPartition]): Unit = {
+  def truncateForMirrorAlignment(epochsOffset: util.Map[TopicPartition, LastMirror], callback: Consumer[TopicPartition]): Unit = {
     epochsOffset.forEach((tp, offsetEpoch) => {
       getLog(tp).map(log => {
         val endOffsetForEpoch = log.endOffsetForEpoch(offsetEpoch.epoch())

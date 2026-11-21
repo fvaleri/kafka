@@ -69,11 +69,11 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ElectionType;
-import org.apache.kafka.common.EpochOffset;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.LastMirror;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
@@ -5243,7 +5243,7 @@ public class KafkaAdminClient extends AdminClient {
                                                                Map<String, List<Integer>> topicPartitions,
                                                                DescribeClusterMirrorsOptions options) {
         final KafkaFutureImpl<Map<String, ClusterMirrorDescription>> all = new KafkaFutureImpl<>();
-        final KafkaFutureImpl<Map<TopicPartition, EpochOffset>> lastMirrorEpochFutures = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<Map<TopicPartition, LastMirror>> lastMirrorEpochFutures = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         final long deadline = calcDeadlineMs(now, options.timeoutMs());
 
@@ -5280,7 +5280,7 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 DescribeClusterMirrorsResponse response = (DescribeClusterMirrorsResponse) abstractResponse;
                 Map<String, ClusterMirrorDescription> descriptions = new HashMap<>();
-                Map<TopicPartition, EpochOffset> lastMirrorEpochs = new HashMap<>();
+                Map<TopicPartition, LastMirror> lastMirrorEpochs = new HashMap<>();
 
                 for (DescribeClusterMirrorsResponseData.DescribedMirror mirror : response.data().mirrors()) {
                     Errors errorCode = Errors.forCode(mirror.errorCode());
@@ -5309,8 +5309,8 @@ public class KafkaAdminClient extends AdminClient {
                             if (partition.lastMirrorEpoch() >= 0 || partition.lastMirrorOffset() >= 0) {
                                 lastMirrorEpochs
                                     .merge(new TopicPartition(topic.topicName(), partition.partitionIndex()),
-                                        new EpochOffset(partition.lastMirrorEpoch(), partition.lastMirrorOffset()),
-                                        (a, b) -> new EpochOffset(
+                                        new LastMirror(partition.lastMirrorEpoch(), partition.lastMirrorOffset()),
+                                        (a, b) -> new LastMirror(
                                             Math.max(a.epoch(), b.epoch()),
                                             Math.max(a.offset(), b.offset())));
                             }

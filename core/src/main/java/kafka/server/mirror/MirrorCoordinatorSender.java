@@ -20,7 +20,7 @@ import kafka.server.KafkaConfig;
 import kafka.server.NetworkUtils;
 
 import org.apache.kafka.clients.KafkaClient;
-import org.apache.kafka.common.EpochOffset;
+import org.apache.kafka.common.LastMirror;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
@@ -216,7 +216,7 @@ class MirrorCoordinatorSender {
                                         new MirrorPartitionMetadata.Builder()
                                                 .withState(MirrorPartitionState.fromValue(partition.state()))
                                                 .withStateEpoch(partition.stateEpoch())
-                                                .withLastMirrorEpoch(new EpochOffset(partition.lastMirrorEpoch(),
+                                                .withLastMirrorEpoch(new LastMirror(partition.lastMirrorEpoch(),
                                                         partition.lastMirrorOffset()))
                                                 .withErrorMessage(partition.errorMessage())
                                                 .withRetryAttempt(partition.retryAttempt())
@@ -287,7 +287,7 @@ class MirrorCoordinatorSender {
                                             new MirrorPartitionMetadata.Builder()
                                                     .withState(MirrorPartitionState.fromValue(partition.state()))
                                                     .withStateEpoch(partition.stateEpoch())
-                                                    .withLastMirrorEpoch(new EpochOffset(partition.lastMirrorEpoch(),
+                                                    .withLastMirrorEpoch(new LastMirror(partition.lastMirrorEpoch(),
                                                             partition.lastMirrorOffset()))
                                                     .withErrorMessage(partition.errorMessage())
                                                     .withRetryAttempt(partition.retryAttempt())
@@ -458,7 +458,7 @@ class MirrorCoordinatorSender {
                 partitionData.setState(m.state() == null ? MirrorPartitionState.UNKNOWN.value() : m.state().value());
                 partitionData.setLeaderEpoch(m.leaderEpoch());
                 partitionData.setStateEpoch(m.stateEpoch());
-                EpochOffset lm = m.lastMirrorEpoch();
+                LastMirror lm = m.lastMirrorEpoch();
                 partitionData.setLastMirrorEpoch(lm != null ? lm.epoch() : -1);
                 partitionData.setLastMirrorOffset(lm != null ? lm.offset() : -1L);
                 partitionData.setPartitionIndex(m.partition());

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server.mirror;
 
-import org.apache.kafka.common.EpochOffset;
+import org.apache.kafka.common.LastMirror;
 
 /**
  * Immutable snapshot of mirror partition metadata.
@@ -28,9 +28,9 @@ import org.apache.kafka.common.EpochOffset;
  * @param retryAttempt    the retry count in FAILED state, 0 if not failed, -1 if non-retryable error
  * @param prevState       the state before entering FAILED, or null if not applicable
  */
-public record MirrorPartitionMetadata(MirrorPartitionState state, int stateEpoch, EpochOffset lastMirrorEpoch,
+public record MirrorPartitionMetadata(MirrorPartitionState state, int stateEpoch, LastMirror lastMirrorEpoch,
                                       String errorMessage, short retryAttempt, MirrorPartitionState prevState) {
-    public static final MirrorPartitionMetadata EMPTY = new MirrorPartitionMetadata(MirrorPartitionState.UNKNOWN, 0, EpochOffset.EMPTY, null, (short) 0, null);
+    public static final MirrorPartitionMetadata EMPTY = new MirrorPartitionMetadata(MirrorPartitionState.UNKNOWN, 0, LastMirror.EMPTY, null, (short) 0, null);
     public static final short NON_RETRYABLE_ERROR = -1;
 
     public static MirrorPartitionMetadata orEmpty(MirrorPartitionMetadata mpm) {
@@ -40,7 +40,7 @@ public record MirrorPartitionMetadata(MirrorPartitionState state, int stateEpoch
     public static class Builder {
         private MirrorPartitionState state;
         private int stateEpoch;
-        private EpochOffset lastMirrorEpoch;
+        private LastMirror lastMirrorEpoch;
         private String errorMessage;
         private short retryAttempt;
         private MirrorPartitionState prevState;
@@ -74,7 +74,7 @@ public record MirrorPartitionMetadata(MirrorPartitionState state, int stateEpoch
             return this;
         }
 
-        public Builder withLastMirrorEpoch(EpochOffset lastMirrorEpoch) {
+        public Builder withLastMirrorEpoch(LastMirror lastMirrorEpoch) {
             this.lastMirrorEpoch = lastMirrorEpoch;
             return this;
         }

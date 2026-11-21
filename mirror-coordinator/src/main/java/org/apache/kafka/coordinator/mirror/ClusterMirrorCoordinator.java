@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.coordinator.mirror;
 
-import org.apache.kafka.common.EpochOffset;
+import org.apache.kafka.common.LastMirror;
 import org.apache.kafka.common.message.ReadMirrorStatesResponseData;
 import org.apache.kafka.common.message.WriteMirrorStatesResponseData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
@@ -156,7 +156,7 @@ public interface ClusterMirrorCoordinator {
             MirrorPartitionState state,
             int leaderEpoch,
             int stateEpoch,
-            EpochOffset lastMirrorEpoch,
+            LastMirror lastMirrorEpoch,
             String errorMessage,
             short retryAttempt,
             boolean nonRetryable

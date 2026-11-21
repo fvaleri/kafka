@@ -19,16 +19,15 @@ package org.apache.kafka.common;
 import java.util.Objects;
 
 /**
- * Pairs a leader epoch with a log offset, used to record the last mirrored
- * position of a partition before mirroring stops.
+ * Last mirroring position before failover (stop).
  */
-public final class EpochOffset {
-    public static final EpochOffset EMPTY = new EpochOffset(-1, -1L);
+public final class LastMirror {
+    public static final LastMirror EMPTY = new LastMirror(-1, -1L);
 
     private final int epoch;
     private final long offset;
 
-    public EpochOffset(int epoch, long offset) {
+    public LastMirror(int epoch, long offset) {
         this.epoch = epoch;
         this.offset = offset;
     }
@@ -47,7 +46,7 @@ public final class EpochOffset {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        EpochOffset that = (EpochOffset) o;
+        LastMirror that = (LastMirror) o;
         return epoch == that.epoch && offset == that.offset;
     }
 

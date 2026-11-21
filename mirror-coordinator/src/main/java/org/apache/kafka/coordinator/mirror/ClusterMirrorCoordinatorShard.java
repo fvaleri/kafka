@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.coordinator.mirror;
 
-import org.apache.kafka.common.EpochOffset;
+import org.apache.kafka.common.LastMirror;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedLeaderEpochException;
 import org.apache.kafka.common.errors.FencedStateEpochException;
@@ -255,7 +255,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
 
             partitionMetadata.put(mp,
                     new MirrorPartitionMetadata.Builder(existing)
-                        .withLastMirrorEpoch(new EpochOffset(lme.lastMirrorEpoch(), lme.lastMirrorOffset()))
+                        .withLastMirrorEpoch(new LastMirror(lme.lastMirrorEpoch(), lme.lastMirrorOffset()))
                         .withStateEpoch(lme.stateEpoch())
                         .build());
         } else {
@@ -361,7 +361,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
                     return;
                 }
             }
-            EpochOffset lm = partition.lastMirrorEpoch();
+            LastMirror lm = partition.lastMirrorEpoch();
             if (lm != null && (lm.epoch() != -1 || lm.offset() != -1)) {
                 try {
                     CoordinatorResult<Integer, CoordinatorRecord> lmeResult =
@@ -443,7 +443,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
      * Mirrors the fencing logic in {@link #writePartitionState}.
      */
     private CoordinatorResult<Integer, CoordinatorRecord> writeLastMirrorEpoch(
-            String mirrorName, TopicPartition tp, EpochOffset lastMirror,
+            String mirrorName, TopicPartition tp, LastMirror lastMirror,
             int leaderEpoch, int stateEpoch, Map<MirrorPartition,
             PendingPartitionState> pendingStates
     ) {
