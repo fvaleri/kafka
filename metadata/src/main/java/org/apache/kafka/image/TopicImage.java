@@ -49,10 +49,14 @@ public record TopicImage(String name, Uuid id, String mirrorName, byte desiredMi
             setName(name).
             setTopicId(id));
         if (mirrorName != null) {
-            writer.write(0, new MirrorTopicStateChangeRecord().
-                    setTopicName(name).
-                    setMirrorName(mirrorName).
-                    setDesiredState(desiredMirrorState));
+            if (!options.metadataVersion().isClusterMirrorSupported()) {
+                options.handleLoss("cluster mirror topic state change");
+            } else {
+                writer.write(0, new MirrorTopicStateChangeRecord().
+                        setTopicName(name).
+                        setMirrorName(mirrorName).
+                        setDesiredState(desiredMirrorState));
+            }
         }
         for (Entry<Integer, PartitionRegistration> entry : partitions.entrySet()) {
             int partitionId = entry.getKey();

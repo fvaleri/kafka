@@ -246,7 +246,7 @@ public final class TopicsDelta {
      *   <li>followers: partitions for which the broker is now a follower or follower with isr or replica updates (partition epoch bump on follower)</li>
      *   <li>topicIds: a map of topic names to topic IDs in leaders and followers changes</li>
      *   <li>directoryIds: partitions for which directory id changes or newly added to the broker</li>
-     *   <li>mirrorTopicStates: topics for which the mirror name or desired mirror state changed</li>
+     *   <li>mirrorTopicStates: topics for which a mirror topic state change record was replayed, or the mirror name or desired mirror state changed</li>
      * </ul>
      * <p>
      * Leader epoch bumps are a strict subset of all partition epoch bumps, so all partitions in electedLeaders will be in leaders.
@@ -272,7 +272,17 @@ public final class TopicsDelta {
             followers.putAll(changes.followers());
             topicIds.putAll(changes.topicIds());
             directoryIds.putAll(changes.directoryIds());
-            mirrorTopicChanges.putAll(changes.mirrorTopicStates());
+
+
+            // Compare against the existing topics image rather than the topic delta's image. When a broker loads a snapshot
+            // after being offline, its local metadata log may contain a stale mirror association that was removed while it
+            // was offline. Comparing against the existing image ensures that this removal is detected.
+            // Incremental update example: local log (mirror-A, MIRRORING) --> fetched snapshot (null, UNKNOWN).
+            // Snapshot update example: local log (mirror-A, MIRRORING) --> fetched snapshot (null, UNKNOWN).
+            LocalReplicaChanges.MirrorTopicState mirrorTopicState = delta.mirrorTopicStateChange(image.getTopic(delta.id()));
+            if (mirrorTopicState != null) {
+                mirrorTopicChanges.put(delta.id(), mirrorTopicState);
+            }
         }
 
         // Add all of the removed topic partitions to the set of locally removed partitions
