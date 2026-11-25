@@ -4796,9 +4796,9 @@ class KafkaApis(val requestChannel: RequestChannel,
               result.getOrElseUpdate(topic.topicName(), scala.collection.mutable.Map.empty)
                 .updateWith(partition.partitionIndex()) {
                   case Some(existing) => Some(new LastMirror(
-                    Math.max(existing.epoch(), epoch),
-                    Math.max(existing.offset(), offset)))
-                  case None => Some(new LastMirror(epoch, offset))
+                    Math.max(existing.offset(), offset),
+                    Math.max(existing.epoch(), epoch)))
+                  case None => Some(new LastMirror(offset, epoch))
                 }
             }
           }
@@ -5002,7 +5002,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val topicState = new util.HashSet[MirrorStateWrite]()
       topic.partitions().forEach(part => {
         val lastMirrorEpoch = if (part.lastMirrorEpoch() != -1 || part.lastMirrorOffset() != -1L)
-          new LastMirror(part.lastMirrorEpoch(), part.lastMirrorOffset()) else null
+          new LastMirror(part.lastMirrorOffset(), part.lastMirrorEpoch()) else null
         topicState.add(new MirrorStateWrite(part.partitionIndex(),
           MirrorPartitionState.fromValue(part.state()), part.leaderEpoch(), part.stateEpoch(),
             lastMirrorEpoch, part.errorMessage(), part.retryAttempt(), part.nonRetryable()))

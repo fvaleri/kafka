@@ -216,8 +216,8 @@ class MirrorCoordinatorSender {
                                         new MirrorPartitionMetadata.Builder()
                                                 .withState(MirrorPartitionState.fromValue(partition.state()))
                                                 .withStateEpoch(partition.stateEpoch())
-                                                .withLastMirrorEpoch(new LastMirror(partition.lastMirrorEpoch(),
-                                                        partition.lastMirrorOffset()))
+                                                .withLastMirrorEpoch(new LastMirror(partition.lastMirrorOffset(),
+                                                        partition.lastMirrorEpoch()))
                                                 .withErrorMessage(partition.errorMessage())
                                                 .withRetryAttempt(partition.retryAttempt())
                                                 .withPrevState(MirrorPartitionState.fromValue(partition.previousState()))
@@ -287,8 +287,8 @@ class MirrorCoordinatorSender {
                                             new MirrorPartitionMetadata.Builder()
                                                     .withState(MirrorPartitionState.fromValue(partition.state()))
                                                     .withStateEpoch(partition.stateEpoch())
-                                                    .withLastMirrorEpoch(new LastMirror(partition.lastMirrorEpoch(),
-                                                            partition.lastMirrorOffset()))
+                                                    .withLastMirrorEpoch(new LastMirror(partition.lastMirrorOffset(),
+                                                            partition.lastMirrorEpoch()))
                                                     .withErrorMessage(partition.errorMessage())
                                                     .withRetryAttempt(partition.retryAttempt())
                                                     .withPrevState(MirrorPartitionState.fromValue(partition.previousState()))

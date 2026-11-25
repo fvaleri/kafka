@@ -882,7 +882,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                                             log.warn("The source cluster doesn't support DescribeClusterMirror API. " +
                                                     "Replication will be one-way without failback.");
                                             replicaManagerSupplier.get().truncateForMirrorAlignment(
-                                                    Map.of(topicPartition, new LastMirror(-1, -1)), callback);
+                                                    Map.of(topicPartition, new LastMirror(-1L, -1)), callback);
                                         } else {
                                             log.warn("Failed to truncate {} to last known position", topicPartition, error);
                                             transitionTo(mirrorName, Set.of(topicPartition), MirrorPartitionState.FAILED,
@@ -892,7 +892,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                                     }
                                     if (!offsetEpochs.containsKey(topicPartition)) {
                                         log.info("No epoch returned for {}, mirroring from scratch", topicPartition);
-                                        offsetEpochs.put(topicPartition, new LastMirror(-1, -1));
+                                        offsetEpochs.put(topicPartition, new LastMirror(-1L, -1));
                                     }
                                     replicaManagerSupplier.get().truncateForMirrorAlignment(
                                             offsetEpochs, callback);
@@ -940,7 +940,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
         var logOpt = rm.getPartitionOrException(tp).log();
         int latestEpoch = logOpt.isDefined() ? logOpt.get().latestEpoch().orElse(-1) : -1;
         long latestOffset = logOpt.isDefined() ? logOpt.get().logEndOffset() : -1L;
-        LastMirror lastMirrorEpoch = new LastMirror(latestEpoch, latestOffset);
+        LastMirror lastMirrorEpoch = new LastMirror(latestOffset, latestEpoch);
 
         MirrorPartition mp = new MirrorPartition(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
         MirrorPartitionMetadata existing = mirrorCache.getPartitionMetadata(mp);
@@ -1581,7 +1581,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                     new MirrorPartitionMetadata.Builder()
                             .withState(MirrorPartitionState.fromValue(partition.state()))
                             .withStateEpoch(partition.stateEpoch())
-                            .withLastMirrorEpoch(new LastMirror(partition.lastMirrorEpoch(), partition.lastMirrorOffset()))
+                            .withLastMirrorEpoch(new LastMirror(partition.lastMirrorOffset(), partition.lastMirrorEpoch()))
                             .withErrorMessage(partition.errorMessage())
                             .withRetryAttempt(partition.retryAttempt())
                             .withPrevState(MirrorPartitionState.fromValue(partition.previousState()))

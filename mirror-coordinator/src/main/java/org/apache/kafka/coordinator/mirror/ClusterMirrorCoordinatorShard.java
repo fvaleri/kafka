@@ -255,7 +255,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
 
             partitionMetadata.put(mp,
                     new MirrorPartitionMetadata.Builder(existing)
-                        .withLastMirrorEpoch(new LastMirror(lme.lastMirrorEpoch(), lme.lastMirrorOffset()))
+                        .withLastMirrorEpoch(new LastMirror(lme.lastMirrorOffset(), lme.lastMirrorEpoch()))
                         .withStateEpoch(lme.stateEpoch())
                         .build());
         } else {

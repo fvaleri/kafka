@@ -5309,10 +5309,10 @@ public class KafkaAdminClient extends AdminClient {
                             if (partition.lastMirrorEpoch() >= 0 || partition.lastMirrorOffset() >= 0) {
                                 lastMirrorEpochs
                                     .merge(new TopicPartition(topic.topicName(), partition.partitionIndex()),
-                                        new LastMirror(partition.lastMirrorEpoch(), partition.lastMirrorOffset()),
+                                        new LastMirror(partition.lastMirrorOffset(), partition.lastMirrorEpoch()),
                                         (a, b) -> new LastMirror(
-                                            Math.max(a.epoch(), b.epoch()),
-                                            Math.max(a.offset(), b.offset())));
+                                            Math.max(a.offset(), b.offset()),
+                                            Math.max(a.epoch(), b.epoch())));
                             }
                         }
                     }

@@ -22,19 +22,14 @@ import java.util.Objects;
  * Last mirroring position before failover (stop).
  */
 public final class LastMirror {
-    public static final LastMirror EMPTY = new LastMirror(-1, -1L);
+    public static final LastMirror EMPTY = new LastMirror(-1L, -1);
 
-    private final int epoch;
     private final long offset;
+    private final int epoch;
 
-    public LastMirror(int epoch, long offset) {
-        this.epoch = epoch;
+    public LastMirror(long offset, int epoch) {
         this.offset = offset;
-    }
-
-    /** The last mirror leader epoch, or -1 if not yet recorded. */
-    public int epoch() {
-        return epoch;
+        this.epoch = epoch;
     }
 
     /** The last mirror offset, or -1 if not yet recorded. */
@@ -42,21 +37,26 @@ public final class LastMirror {
         return offset;
     }
 
+    /** The last mirror leader epoch, or -1 if not yet recorded. */
+    public int epoch() {
+        return epoch;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         LastMirror that = (LastMirror) o;
-        return epoch == that.epoch && offset == that.offset;
+        return offset == that.offset && epoch == that.epoch;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(epoch, offset);
+        return Objects.hash(offset, epoch);
     }
 
     @Override
     public String toString() {
-        return "OffsetEpoch(epoch=" + epoch + ", offset=" + offset + ")";
+        return "LastMirror(offset=" + offset + ", epoch=" + epoch + ")";
     }
 }

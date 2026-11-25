@@ -311,8 +311,8 @@ class ClusterMirroringTest(MirrorUtils, Test):
                 if line:
                     self.logger.info("LME lookup log on %s: %s", node.name, line)
                     value = line.split("my-topic-0=")[1].split("}")[0]
-                    epoch = int(value.split("epoch=")[1].split(",")[0])
-                    offset = int(value.split("offset=")[1].split(")")[0])
+                    offset = int(value.split("offset=")[1].split(",")[0])
+                    epoch = int(value.split("epoch=")[1].split(")")[0])
                     assert epoch >= 1, \
                         "Expected LME epoch >= 1, got %d in: %s" % (epoch, line)
                     assert offset == 6, \

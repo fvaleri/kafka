@@ -164,14 +164,14 @@ public record MirrorPartitionMetadata(MirrorPartitionState state, int stateEpoch
         }
     }
 
-    public short nextAttempt(boolean nonRetryable, short maxAttempts) {
+    private short nextAttempt(boolean nonRetryable, short maxAttempts) {
         if (nonRetryable || retryAttempt == NON_RETRYABLE_ERROR) {
             return NON_RETRYABLE_ERROR;
         }
         return (short) (retryAttempt != 0 ? Math.min(maxAttempts, retryAttempt + 1) : 1);
     }
 
-    public MirrorPartitionState resolvePrevState(MirrorPartitionState currState) {
+    private MirrorPartitionState resolvePrevState(MirrorPartitionState currState) {
         if (currState == MirrorPartitionState.FAILED && (prevState != null && prevState != MirrorPartitionState.UNKNOWN)) {
             return prevState;
         }
