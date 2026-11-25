@@ -125,9 +125,7 @@ public class MirrorLeaderCache {
                 return current;
             }
             return new MirrorPartitionMetadata.Builder(existing)
-                    .withTransitionErrorFields(state, errorMessage, nonRetryable, maxRetryAttempts)
-                    .withState(state)
-                    .withStateEpoch(stateEpoch)
+                    .withStateTransition(state, stateEpoch, Optional.ofNullable(errorMessage), nonRetryable, maxRetryAttempts)
                     .build();
         });
         return updated != null && updated.stateEpoch() == stateEpoch && updated.state() == state;
@@ -146,7 +144,7 @@ public class MirrorLeaderCache {
                 return existing;
             }
             return new MirrorPartitionMetadata.Builder(existing)
-                    .withLastMirrorEpoch(position)
+                    .withLastMirror(position)
                     .withStateEpoch(stateEpoch)
                     .build();
         });
@@ -162,9 +160,7 @@ public class MirrorLeaderCache {
                 return existing;
             }
             return new MirrorPartitionMetadata.Builder(existing)
-                    .withErrorMessage(null)
-                    .withRetryAttempt((short) 0)
-                    .withPrevState(null)
+                    .withFailedStateReset()
                     .build();
         });
     }

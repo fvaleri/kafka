@@ -57,6 +57,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -228,9 +229,9 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
             partitionMetadata.put(mp, new MirrorPartitionMetadata.Builder(existing)
                     .withState(state)
                     .withStateEpoch(stateValue.stateEpoch())
-                    .withErrorMessage(stateValue.errorMessage())
+                    .withErrorMessage(Optional.ofNullable(stateValue.errorMessage()))
                     .withRetryAttempt(stateValue.retryAttempt())
-                    .withPrevState(previousState == MirrorPartitionState.UNKNOWN ? null : previousState)
+                    .withPreviousState(previousState)
                     .build());
         } else {
             // Update per-state metrics counters
@@ -255,7 +256,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
 
             partitionMetadata.put(mp,
                     new MirrorPartitionMetadata.Builder(existing)
-                        .withLastMirrorEpoch(new LastMirror(lme.lastMirrorOffset(), lme.lastMirrorEpoch()))
+                        .withLastMirror(new LastMirror(lme.lastMirrorOffset(), lme.lastMirrorEpoch()))
                         .withStateEpoch(lme.stateEpoch())
                         .build());
         } else {
@@ -304,12 +305,11 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
                         .setState(mpm.state().value())
                         .setLeaderEpoch(leaderEpoch)
                         .setStateEpoch(mpm.stateEpoch())
-                        .setPreviousState(mpm.prevState() != null ?
-                                mpm.prevState().value() : MirrorPartitionState.UNKNOWN.value())
-                        .setLastMirrorEpoch(mpm.lastMirrorEpoch().epoch())
-                        .setLastMirrorOffset(mpm.lastMirrorEpoch().offset())
+                        .setPreviousState(mpm.previousState().value())
+                        .setLastMirrorEpoch(mpm.lastMirror().epoch())
+                        .setLastMirrorOffset(mpm.lastMirror().offset())
                         .setRetryAttempt(mpm.retryAttempt())
-                        .setErrorMessage(mpm.errorMessage());
+                        .setErrorMessage(mpm.errorMessage().orElse(null));
                 partitionResults.add(pr);
             });
             topicResults.add(new ReadMirrorStatesResponseData.TopicResult()
@@ -361,7 +361,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
                     return;
                 }
             }
-            LastMirror lm = partition.lastMirrorEpoch();
+            LastMirror lm = partition.lastMirror();
             if (lm != null && (lm.epoch() != -1 || lm.offset() != -1)) {
                 try {
                     CoordinatorResult<Integer, CoordinatorRecord> lmeResult =
@@ -411,13 +411,12 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
             return new CoordinatorResult<>(List.of(), current.stateEpoch());
         }
 
-        MirrorPartitionMetadata updated = new MirrorPartitionMetadata.Builder(existing)
-                .withTransitionErrorFields(state, errorMessage,
-                        nonRetryable, mirrorConfig.failedRetryMaxAttempts())
-                .withState(state)
-                .build();
         int newLeaderEpoch = leaderEpoch != -1 ? leaderEpoch : current.leaderEpoch();
         int newStateEpoch = current.stateEpoch() + 1;
+        MirrorPartitionMetadata updated = new MirrorPartitionMetadata.Builder(existing)
+                .withStateTransition(state, newStateEpoch, Optional.ofNullable(errorMessage),
+                        nonRetryable, mirrorConfig.failedRetryMaxAttempts())
+                .build();
         pendingStates.put(mp, new PendingPartitionState(updated, newLeaderEpoch, newStateEpoch));
 
         var key = new MirrorPartitionStateKey()
@@ -428,10 +427,9 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
                 .setState(state.value())
                 .setLeaderEpoch(leaderEpoch)
                 .setStateEpoch(newStateEpoch)
-                .setPreviousState(updated.prevState() != null ?
-                        updated.prevState().value() : MirrorPartitionState.UNKNOWN.value())
+                .setPreviousState(updated.previousState().value())
                 .setRetryAttempt(updated.retryAttempt())
-                .setErrorMessage(updated.errorMessage());
+                .setErrorMessage(updated.errorMessage().orElse(null));
         CoordinatorRecord record = CoordinatorRecord.record(key,
                 new ApiMessageAndVersion(val, MirrorPartitionStateValue.HIGHEST_SUPPORTED_VERSION));
         log.debug("Writing partitionState record to partition {} with content: {}", tp, record);

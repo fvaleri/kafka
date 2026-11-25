@@ -495,8 +495,8 @@ class MirrorSourceSyncer {
                                         MirrorPartition key = new MirrorPartition(mirrorName, topicImage.id(),  partitionId);
                                         MirrorPartitionMetadata mpm = MirrorPartitionMetadata.orEmpty(mirrorCache.getPartitionMetadata(key));
                                         if (mpm.state() == MirrorPartitionState.FAILED && mpm.retryAttempt() == MirrorPartitionMetadata.NON_RETRYABLE_ERROR) {
-                                            log.debug("Skipping transition to FAILED state for partition {}-{} . Reason: Already in this state due to: {}.",
-                                                    topic, partitionId, mpm.errorMessage());
+                                            log.debug("Skipping transition to FAILED state for partition {}-{}. Reason: Already in this state due to: {}.",
+                                                    topic, partitionId, mpm.errorMessage().orElse("Unknown"));
                                         } else {
                                             mirrorLeaderPartitions.add(new TopicPartition(topic, partitionId));
                                         }
@@ -710,7 +710,7 @@ class MirrorSourceSyncer {
                                 MirrorPartition key = new MirrorPartition(mirrorName, topicImage.id(), partitionId);
                                 MirrorPartitionMetadata mpm = MirrorPartitionMetadata.orEmpty(mirrorCache.getPartitionMetadata(key));
                                 if (mpm.state() == MirrorPartitionState.FAILED && mpm.retryAttempt() == MirrorPartitionMetadata.NON_RETRYABLE_ERROR) {
-                                    log.debug("Skipping transition to FAILED state for partition {}. Already in this state due to: {}", name, partition, mpm.errorMessage());
+                                    log.debug("Skipping transition to FAILED state for partition {}. Already in this state due to: {}", name, partition, mpm.errorMessage().orElse("Unknown"));
                                 } else {
                                     log.info("Detected topic {} deleted in source cluster {}, marking partitions as failed (non retryable).", name, mirrorName);
                                     transitionHandler.transitionTo(mirrorName, Set.of(new TopicPartition(name, partitionId)),

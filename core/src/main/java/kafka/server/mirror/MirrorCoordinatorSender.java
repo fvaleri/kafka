@@ -216,11 +216,11 @@ class MirrorCoordinatorSender {
                                         new MirrorPartitionMetadata.Builder()
                                                 .withState(MirrorPartitionState.fromValue(partition.state()))
                                                 .withStateEpoch(partition.stateEpoch())
-                                                .withLastMirrorEpoch(new LastMirror(partition.lastMirrorOffset(),
+                                                .withLastMirror(new LastMirror(partition.lastMirrorOffset(),
                                                         partition.lastMirrorEpoch()))
-                                                .withErrorMessage(partition.errorMessage())
+                                                .withErrorMessage(Optional.ofNullable(partition.errorMessage()))
                                                 .withRetryAttempt(partition.retryAttempt())
-                                                .withPrevState(MirrorPartitionState.fromValue(partition.previousState()))
+                                                .withPreviousState(MirrorPartitionState.fromValue(partition.previousState()))
                                                 .build());
                             }));
                     return new ReadMirrorStatesResponse(res);
@@ -287,11 +287,11 @@ class MirrorCoordinatorSender {
                                             new MirrorPartitionMetadata.Builder()
                                                     .withState(MirrorPartitionState.fromValue(partition.state()))
                                                     .withStateEpoch(partition.stateEpoch())
-                                                    .withLastMirrorEpoch(new LastMirror(partition.lastMirrorOffset(),
+                                                    .withLastMirror(new LastMirror(partition.lastMirrorOffset(),
                                                             partition.lastMirrorEpoch()))
-                                                    .withErrorMessage(partition.errorMessage())
+                                                    .withErrorMessage(Optional.ofNullable(partition.errorMessage()))
                                                     .withRetryAttempt(partition.retryAttempt())
-                                                    .withPrevState(MirrorPartitionState.fromValue(partition.previousState()))
+                                                    .withPreviousState(MirrorPartitionState.fromValue(partition.previousState()))
                                                     .build());
                                 }));
 
@@ -458,7 +458,7 @@ class MirrorCoordinatorSender {
                 partitionData.setState(m.state() == null ? MirrorPartitionState.UNKNOWN.value() : m.state().value());
                 partitionData.setLeaderEpoch(m.leaderEpoch());
                 partitionData.setStateEpoch(m.stateEpoch());
-                LastMirror lm = m.lastMirrorEpoch();
+                LastMirror lm = m.lastMirror();
                 partitionData.setLastMirrorEpoch(lm != null ? lm.epoch() : -1);
                 partitionData.setLastMirrorOffset(lm != null ? lm.offset() : -1L);
                 partitionData.setPartitionIndex(m.partition());

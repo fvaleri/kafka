@@ -625,7 +625,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
         if (currentState == MirrorPartitionState.FAILED) {
             MirrorPartition mp = new MirrorPartition(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
             MirrorPartitionMetadata mpm = mirrorCache.getPartitionMetadata(mp);
-            transitionTo(mirrorName, Set.of(tp), MirrorPartitionState.FAILED, mpm.errorMessage(), mpm.retryAttempt() == NON_RETRYABLE_ERROR);
+            transitionTo(mirrorName, Set.of(tp), MirrorPartitionState.FAILED, mpm.errorMessage().orElse(null), mpm.retryAttempt() == NON_RETRYABLE_ERROR);
         } else if (stopRequested) {
             if (currentState != MirrorPartitionState.STOPPED) {
                 transitionTo(mirrorName, Set.of(tp), MirrorPartitionState.STOPPING, null, false);
@@ -1014,8 +1014,8 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
             mirrorConfig.failedRetryMaxBackoffMs(),
             CommonClientConfigs.RETRY_BACKOFF_JITTER);
         long delay = backoff.backoff(attempt);
-        MirrorPartitionState targetState = (mpm.prevState() == null || mpm.prevState() == MirrorPartitionState.UNKNOWN)
-            ? MirrorPartitionState.LOG_ALIGNMENT : mpm.prevState();
+        MirrorPartitionState targetState = mpm.previousState() == MirrorPartitionState.UNKNOWN
+            ? MirrorPartitionState.LOG_ALIGNMENT : mpm.previousState();
         scheduleRetry(tp.toString(),
             () -> transitionTo(mirrorName, Set.of(tp), targetState, null, false),
             delay, "Retry #" + attempt + " targeting " + targetState);
@@ -1581,10 +1581,10 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                     new MirrorPartitionMetadata.Builder()
                             .withState(MirrorPartitionState.fromValue(partition.state()))
                             .withStateEpoch(partition.stateEpoch())
-                            .withLastMirrorEpoch(new LastMirror(partition.lastMirrorOffset(), partition.lastMirrorEpoch()))
-                            .withErrorMessage(partition.errorMessage())
+                            .withLastMirror(new LastMirror(partition.lastMirrorOffset(), partition.lastMirrorEpoch()))
+                            .withErrorMessage(Optional.ofNullable(partition.errorMessage()))
                             .withRetryAttempt(partition.retryAttempt())
-                            .withPrevState(MirrorPartitionState.fromValue(partition.previousState()))
+                            .withPreviousState(MirrorPartitionState.fromValue(partition.previousState()))
                             .build());
             persistState(mirrorName, tp, state, errorMessage, nonRetryable);
         }));
@@ -1963,7 +1963,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
             return;
         }
 
-        if (existing.retryAttempt() == 0 && existing.errorMessage() == null && existing.prevState() == null) {
+        if (existing.retryAttempt() == 0 && existing.errorMessage().isEmpty() && existing.previousState() == MirrorPartitionState.UNKNOWN) {
             log.debug("Skipping failed state clearance for partition {}. Reason: Current state is up-to-date.", tp);
             return;
         }
@@ -2098,9 +2098,9 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
                 // Both local and remote coordinator state have been read into the data leader cache
                 // by writeRecoveryRecords before this method is called.
                 MirrorPartitionMetadata mpm = mirrorCache.getPartitionMetadata(mp);
-                if (mpm.state() == MirrorPartitionState.FAILED && mpm.prevState() != null) {
-                    MirrorStateWrite write = new MirrorStateWrite(i, mpm.prevState(),
-                            mpm.lastMirrorEpoch().epoch(), mpm.stateEpoch(), null, null, (short) 0, false);
+                if (mpm.state() == MirrorPartitionState.FAILED && mpm.previousState() != MirrorPartitionState.UNKNOWN) {
+                    MirrorStateWrite write = new MirrorStateWrite(i, mpm.previousState(),
+                            mpm.lastMirror().epoch(), mpm.stateEpoch(), null, null, (short) 0, false);
                     if (coordSender.isLocalCoordinatorFor(mirrorName, topicImage.id(), i)) {
                         localWrites.computeIfAbsent(topic, k -> new HashSet<>()).add(write);
                     } else {
