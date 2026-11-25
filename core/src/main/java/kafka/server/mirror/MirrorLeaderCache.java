@@ -111,7 +111,7 @@ public class MirrorLeaderCache {
      */
     public boolean updatePartitionState(
             MirrorPartition mp, MirrorPartitionState state, int stateEpoch,
-            String errorMessage, short retryAttempt, boolean nonRetryable, short maxRetryAttempts
+            String errorMessage, boolean nonRetryable, short maxRetryAttempts
     ) {
         MirrorPartitionMetadata updated = mirrorPartitions.compute(mp, (key, current) -> {
             MirrorPartitionMetadata existing = MirrorPartitionMetadata.orEmpty(current);
@@ -125,7 +125,7 @@ public class MirrorLeaderCache {
                 return current;
             }
             return new MirrorPartitionMetadata.Builder(existing)
-                    .withResolvedErrorInfo(state, errorMessage, retryAttempt, nonRetryable, maxRetryAttempts)
+                    .withTransitionErrorFields(state, errorMessage, nonRetryable, maxRetryAttempts)
                     .withState(state)
                     .withStateEpoch(stateEpoch)
                     .build();

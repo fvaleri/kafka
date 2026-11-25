@@ -797,7 +797,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
             return;
         }
         short maxAttempts = new ClusterMirrorConfig(brokerConfig).failedRetryMaxAttempts();
-        if (mirrorCache.updatePartitionState(mp, state, stateEpoch, errorMessage, (short) -1, nonRetryable, maxAttempts)) {
+        if (mirrorCache.updatePartitionState(mp, state, stateEpoch, errorMessage, nonRetryable, maxAttempts)) {
             onStateTransition(mirrorName, tp, state);
         }
     }
@@ -809,7 +809,7 @@ public class MirrorMetadataManager implements MetadataManagerBridge, MetadataPub
         MirrorPartition mp = new MirrorPartition(mirrorName, mirrorCache.getTopicId(tp.topic()), tp.partition());
         if (part.errorCode() == Errors.NONE.code()) {
             short maxAttempts = new ClusterMirrorConfig(brokerConfig).failedRetryMaxAttempts();
-            if (mirrorCache.updatePartitionState(mp, state, part.stateEpoch(), errorMessage, (short) -1, nonRetryable, maxAttempts)) {
+            if (mirrorCache.updatePartitionState(mp, state, part.stateEpoch(), errorMessage, nonRetryable, maxAttempts)) {
                 onStateTransition(mirrorName, tp, state);
             }
         } else if (part.errorCode() == Errors.COORDINATOR_LOAD_IN_PROGRESS.code()) {

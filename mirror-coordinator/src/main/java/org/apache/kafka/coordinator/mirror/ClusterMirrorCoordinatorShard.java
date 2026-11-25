@@ -349,7 +349,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
                     CoordinatorResult<Integer, CoordinatorRecord> result =
                             writePartitionState(mirrorName, tp, partition.state(),
                                     partition.leaderEpoch(), partition.stateEpoch(),
-                                    partition.errorMessage(), partition.retryAttempt(),
+                                    partition.errorMessage(),
                                     partition.nonRetryable(), pendingStates);
                     records.addAll(result.records());
                     results.put(tp, new PartitionWriteResult(Errors.NONE, result.response()));
@@ -385,7 +385,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
      */
     private CoordinatorResult<Integer, CoordinatorRecord> writePartitionState(
             String mirrorName, TopicPartition tp, MirrorPartitionState state, int leaderEpoch,
-            int stateEpoch, String errorMessage, short retryAttempt, boolean nonRetryable,
+            int stateEpoch, String errorMessage, boolean nonRetryable,
             Map<MirrorPartition, PendingPartitionState> pendingStates
     ) {
         MirrorPartition mp = new MirrorPartition(mirrorName, metadataCache.getTopicId(tp.topic()), tp.partition());
@@ -412,7 +412,7 @@ public class ClusterMirrorCoordinatorShard implements CoordinatorShard<Coordinat
         }
 
         MirrorPartitionMetadata updated = new MirrorPartitionMetadata.Builder(existing)
-                .withResolvedErrorInfo(state, errorMessage, retryAttempt,
+                .withTransitionErrorFields(state, errorMessage,
                         nonRetryable, mirrorConfig.failedRetryMaxAttempts())
                 .withState(state)
                 .build();

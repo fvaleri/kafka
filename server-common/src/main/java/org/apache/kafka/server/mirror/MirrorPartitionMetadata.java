@@ -95,22 +95,26 @@ public record MirrorPartitionMetadata(MirrorPartitionState state, int stateEpoch
         }
 
         /**
-         * Resolves error-related fields based on the transition to {@code newState}.
-         *
-         * When entering FAILED, computes the retry attempt count and records the previous state.
-         * When leaving FAILED (or entering STOPPED/PAUSED), clears all error fields.
-         * Otherwise, updates only the error message.
+         * Computes error-related fields for a local state transition.
          */
-        public Builder withResolvedErrorInfo(MirrorPartitionState newState, String errorMessage,
-                                             short retryAttempt, boolean nonRetryable, short maxRetryAttempts) {
-            if (retryAttempt != -1) {
-                this.retryAttempt = retryAttempt;
-            }
+        public Builder withTransitionErrorFields(MirrorPartitionState newState,
+                                                 String errorMessage,
+                                                 boolean nonRetryable,
+                                                 short maxRetryAttempts) {
             if (newState == MirrorPartitionState.FAILED) {
-                MirrorPartitionMetadata current = build();
                 this.errorMessage = errorMessage;
-                this.retryAttempt = current.nextAttempt(nonRetryable, maxRetryAttempts);
-                this.prevState = current.resolvePrevState(this.state);
+                // Non-retryable errors stay non-retryable; otherwise increment up to maxRetryAttempts
+                if (nonRetryable || this.retryAttempt == NON_RETRYABLE_ERROR) {
+                    this.retryAttempt = NON_RETRYABLE_ERROR;
+                } else {
+                    this.retryAttempt = (short) (this.retryAttempt != 0
+                            ? Math.min(maxRetryAttempts, this.retryAttempt + 1) : 1);
+                }
+                // Preserve the original pre-failure state across repeated failures
+                if (this.state != MirrorPartitionState.FAILED
+                        || this.prevState == null || this.prevState == MirrorPartitionState.UNKNOWN) {
+                    this.prevState = this.state;
+                }
             } else if ((this.state != MirrorPartitionState.FAILED && this.state != newState)
                     || newState == MirrorPartitionState.STOPPED
                     || newState == MirrorPartitionState.PAUSED) {
@@ -162,19 +166,5 @@ public record MirrorPartitionMetadata(MirrorPartitionState state, int stateEpoch
             default:
                 return false;
         }
-    }
-
-    private short nextAttempt(boolean nonRetryable, short maxAttempts) {
-        if (nonRetryable || retryAttempt == NON_RETRYABLE_ERROR) {
-            return NON_RETRYABLE_ERROR;
-        }
-        return (short) (retryAttempt != 0 ? Math.min(maxAttempts, retryAttempt + 1) : 1);
-    }
-
-    private MirrorPartitionState resolvePrevState(MirrorPartitionState currState) {
-        if (currState == MirrorPartitionState.FAILED && (prevState != null && prevState != MirrorPartitionState.UNKNOWN)) {
-            return prevState;
-        }
-        return currState;
     }
 }
