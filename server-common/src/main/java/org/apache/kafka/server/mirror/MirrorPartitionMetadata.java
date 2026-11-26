@@ -32,19 +32,26 @@ public record MirrorPartitionMetadata(
     short retryAttempt,
     MirrorPartitionState previousState
 ) {
-    public static final MirrorPartitionMetadata EMPTY = new MirrorPartitionMetadata(
-            MirrorPartitionState.UNKNOWN, 0, LastMirror.EMPTY, Optional.empty(), (short) 0, MirrorPartitionState.UNKNOWN);
     public static final short NON_RETRYABLE_ERROR = -1;
+
+    public static final MirrorPartitionMetadata EMPTY = new MirrorPartitionMetadata(
+        MirrorPartitionState.UNKNOWN, 0, LastMirror.EMPTY, Optional.empty(), (short) 0, MirrorPartitionState.UNKNOWN);
+
+    public static MirrorPartitionMetadata orEmpty(MirrorPartitionMetadata metadata) {
+        return metadata != null ? metadata : EMPTY;
+    }
 
     public MirrorPartitionMetadata {
         Objects.requireNonNull(state);
+        if (stateEpoch < 0) {
+            throw new IllegalArgumentException("stateEpoch must be non-negative");
+        }
         Objects.requireNonNull(lastMirror);
         Objects.requireNonNull(errorMessage);
+        if (retryAttempt < NON_RETRYABLE_ERROR) {
+            throw new IllegalArgumentException("retryAttempt must be >= " + NON_RETRYABLE_ERROR);
+        }
         Objects.requireNonNull(previousState);
-    }
-
-    public static MirrorPartitionMetadata orEmpty(MirrorPartitionMetadata mpm) {
-        return mpm != null ? mpm : EMPTY;
     }
 
     public static class Builder {
@@ -69,7 +76,7 @@ public record MirrorPartitionMetadata(
         }
 
         public Builder withState(MirrorPartitionState state) {
-            this.state = state;
+            this.state = Objects.requireNonNull(state);
             return this;
         }
 
@@ -79,12 +86,12 @@ public record MirrorPartitionMetadata(
         }
 
         public Builder withLastMirror(LastMirror lastMirror) {
-            this.lastMirror = lastMirror;
+            this.lastMirror = Objects.requireNonNull(lastMirror);
             return this;
         }
 
         public Builder withErrorMessage(Optional<String> errorMessage) {
-            this.errorMessage = errorMessage;
+            this.errorMessage = Objects.requireNonNull(errorMessage);
             return this;
         }
 
@@ -94,7 +101,7 @@ public record MirrorPartitionMetadata(
         }
 
         public Builder withPreviousState(MirrorPartitionState previousState) {
-            this.previousState = previousState;
+            this.previousState = Objects.requireNonNull(previousState);
             return this;
         }
 
@@ -108,16 +115,16 @@ public record MirrorPartitionMetadata(
         /**
          * Transitions to the given state and computes error-related fields.
          */
-        public Builder withStateTransition(MirrorPartitionState state,
-                                      int stateEpoch,
-                                      Optional<String> errorMessage,
-                                      boolean nonRetryable,
-                                      short maxRetryAttempts) {
-            if (state == MirrorPartitionState.FAILED) {
+        public Builder withStateTransition(MirrorPartitionState targetState,
+                                           int newStateEpoch,
+                                           Optional<String> newErrorMessage,
+                                           boolean nonRetryable,
+                                           short maxRetryAttempts) {
+            if (targetState == MirrorPartitionState.FAILED) {
                 if (maxRetryAttempts < 0) {
                     throw new IllegalArgumentException("maxRetryAttempts must be non-negative");
                 }
-                this.errorMessage = errorMessage;
+                this.errorMessage = newErrorMessage;
                 if (nonRetryable || this.retryAttempt == NON_RETRYABLE_ERROR) {
                     this.retryAttempt = NON_RETRYABLE_ERROR;
                 } else {
@@ -126,17 +133,15 @@ public record MirrorPartitionMetadata(
                 if (this.state != MirrorPartitionState.FAILED) {
                     this.previousState = this.state;
                 }
-            } else if ((this.state != MirrorPartitionState.FAILED && this.state != state)
-                    || state == MirrorPartitionState.STOPPED
-                    || state == MirrorPartitionState.PAUSED) {
-                this.errorMessage = Optional.empty();
-                this.retryAttempt = (short) 0;
-                this.previousState = MirrorPartitionState.UNKNOWN;
+            } else if ((this.state != MirrorPartitionState.FAILED && this.state != targetState)
+                    || targetState == MirrorPartitionState.STOPPED
+                    || targetState == MirrorPartitionState.PAUSED) {
+                withFailedStateReset();
             } else {
-                this.errorMessage = errorMessage;
+                this.errorMessage = Optional.empty();
             }
-            this.state = state;
-            this.stateEpoch = stateEpoch;
+            this.state = targetState;
+            this.stateEpoch = newStateEpoch;
             return this;
         }
 
@@ -146,14 +151,17 @@ public record MirrorPartitionMetadata(
         }
     }
 
-    @SuppressWarnings({"cyclomaticComplexity", "BooleanExpressionComplexity"})
+    @SuppressWarnings("cyclomaticComplexity")
     public static boolean isValidStateTransition(MirrorPartitionState source,
                                                  MirrorPartitionState target) {
         if (source == null || target == null) {
             return false;
         }
-        if (source == target || source == MirrorPartitionState.FAILED) {
+        if (source == target) {
             return true;
+        }
+        if (source == MirrorPartitionState.FAILED) {
+            return target != MirrorPartitionState.UNKNOWN;
         }
         return switch (target) {
             case LOG_ALIGNMENT -> source == MirrorPartitionState.UNKNOWN
@@ -168,7 +176,7 @@ public record MirrorPartitionMetadata(
                     || source == MirrorPartitionState.PAUSED;
             case STOPPED -> source == MirrorPartitionState.STOPPING;
             case FAILED -> true;
-            default -> false;
+            case UNKNOWN -> false;
         };
     }
 }
